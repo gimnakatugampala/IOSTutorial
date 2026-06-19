@@ -11,6 +11,9 @@ struct ContentView: View {
     @State private var buttonPosition = CGPoint(x: 200, y: 400)
     let moveButtonTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
     
+    // Shrinking Button
+    @State private var buttonSize: CGFloat = 200
+    
     // Timer
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
@@ -27,15 +30,20 @@ struct ContentView: View {
                 }
                 .padding()
                 
-                // Tap button or Game Over screen
                 if !gameOver {
                     Button(action: {
                         score += 1
+                        // Shrink button on every tap, minimum size 50
+                        withAnimation {
+                            if buttonSize > 50 {
+                                buttonSize -= 10
+                            }
+                        }
                     }) {
                         Text("TAP")
                             .font(.title)
                             .bold()
-                            .frame(width: 200, height: 200)
+                            .frame(width: buttonSize, height: buttonSize)
                             .background(Color.red)
                             .foregroundColor(.white)
                             .clipShape(Circle())
@@ -56,10 +64,8 @@ struct ContentView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity) // ← ADD THIS
-
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                
             }
             .onAppear {
                 buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
@@ -87,6 +93,7 @@ struct ContentView: View {
         score = 0
         timeRemaining = 10
         gameOver = false
+        buttonSize = 200  // reset size
         buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
     }
 }
