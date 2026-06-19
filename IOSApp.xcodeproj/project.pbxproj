@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		D714B8EB2FD4347800B4D610 /* IOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D714B8EB2FD4347800B4D610 /* IOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = IOSApp.app; path = "/Users/student3/dev/IOSApp/build/Debug-iphoneos/IOSApp.app"; sourceTree = "<absolute>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		D714B8ED2FD4347800B4D610 /* IOSApp */ = {
+		D73C5C7D2FE57C6900725D9D /* IOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = IOSApp;
 			sourceTree = "<group>";
@@ -32,17 +32,8 @@
 		D714B8E22FD4347800B4D610 = {
 			isa = PBXGroup;
 			children = (
-				D714B8ED2FD4347800B4D610 /* IOSApp */,
-				D714B8EC2FD4347800B4D610 /* Products */,
+				D73C5C7D2FE57C6900725D9D /* IOSApp */,
 			);
-			sourceTree = "<group>";
-		};
-		D714B8EC2FD4347800B4D610 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				D714B8EB2FD4347800B4D610 /* IOSApp.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -61,7 +52,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				D714B8ED2FD4347800B4D610 /* IOSApp */,
+				D73C5C7D2FE57C6900725D9D /* IOSApp */,
 			);
 			name = IOSApp;
 			packageProductDependencies = (
@@ -95,7 +86,7 @@
 			mainGroup = D714B8E22FD4347800B4D610;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = D714B8EC2FD4347800B4D610 /* Products */;
+			productRefGroup = D714B8E22FD4347800B4D610;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

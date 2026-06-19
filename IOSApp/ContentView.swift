@@ -7,68 +7,90 @@ struct ContentView: View {
     @State private var timeRemaining = 10
     @State private var gameOver = false
     
+    // Moving Target
+    @State private var buttonPosition = CGPoint(x: 200, y: 400)
+    let moveButtonTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+    
     // Timer
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
-//    everything visible on the screen
     var body: some View {
-        VStack(spacing: 40) {
-            // Score display
-            Text("Score: \(score)")
-                .font(.largeTitle)
-            
-            // Tap button or Game Over screen
-            if !gameOver {
-                Button(action: {
-                    score += 1
-                }) {
-                    Text("TAP")
-                        .font(.title)
-                        .bold()
-                        .frame(width: 200, height: 200)
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
-                }
-            } else {
-                VStack(spacing: 20) {
-                    Text("Game Over")
+        GeometryReader { geometry in
+            ZStack {
+                // Score display
+                VStack {
+                    Text("Score: \(score)")
                         .font(.largeTitle)
-                        .bold()
-                   
-                    
-                    Button("Play Again") {
-                        restartGame()
+                    Spacer()
+                    Text("Time: \(timeRemaining)")
+                        .font(.title2)
+                }
+                .padding()
+                
+                // Tap button or Game Over screen
+                if !gameOver {
+                    Button(action: {
+                        score += 1
+                    }) {
+                        Text("TAP")
+                            .font(.title)
+                            .bold()
+                            .frame(width: 200, height: 200)
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .clipShape(Circle())
                     }
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+                    .position(buttonPosition)
+                } else {
+                    VStack(spacing: 20) {
+                        Text("Game Over")
+                            .font(.largeTitle)
+                            .bold()
+                        Text("Final Score: \(score)")
+                            .font(.title)
+                        Button("Play Again") {
+                            restartGame(in: geometry)
+                        }
+                        .padding()
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity) // ← ADD THIS
+
+                }
+                
+            }
+            .onAppear {
+                buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            }
+            .onReceive(timer) { _ in
+                guard timeRemaining > 0 else {
+                    gameOver = true
+                    return
+                }
+                timeRemaining -= 1
+            }
+            .onReceive(moveButtonTimer) { _ in
+                if !gameOver {
+                    let x = CGFloat.random(in: 50...(geometry.size.width - 50))
+                    let y = CGFloat.random(in: 150...(geometry.size.height - 150))
+                    withAnimation {
+                        buttonPosition = CGPoint(x: x, y: y)
+                    }
                 }
             }
-            
-            // Countdown timer
-            Text("Time: \(timeRemaining)")
-                .font(.title2)
-        }
-        .onReceive(timer) { _ in
-            guard timeRemaining > 0 else {
-                gameOver = true
-                return
-            }
-            timeRemaining -= 1
         }
     }
     
-    func restartGame() {
+    func restartGame(in geometry: GeometryProxy) {
         score = 0
         timeRemaining = 10
         gameOver = false
+        buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
+#Preview {
+    ContentView()
 }
