@@ -1,3 +1,10 @@
+//
+//  IOSAppApp.swift
+//  IOSApp
+//
+//  Created by Student3 on 2026-06-06.
+//
+
 import SwiftUI
 
 struct HomeView: View {
@@ -28,10 +35,8 @@ struct GameModeButton: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text(title)
-                .font(.title).bold().foregroundColor(.white)
-            Text(subtitle)
-                .font(.subheadline).foregroundColor(.white.opacity(0.8))
+            Text(title).font(.title).bold().foregroundColor(.white)
+            Text(subtitle).font(.subheadline).foregroundColor(.white.opacity(0.8))
         }
         .frame(maxWidth: .infinity)
         .padding(30)
@@ -40,11 +45,4 @@ struct GameModeButton: View {
     }
 }
 
-@main
-struct IOSAppApp: App {
-    var body: some Scene {
-        WindowGroup {
-            HomeView()
-        }
-    }
-}
+
