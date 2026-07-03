@@ -3,38 +3,54 @@ import Combine
 
 // MARK: - Level config
 enum GameLevel {
-    case l1, l2, l3, l4
+    case l1, l2, l3, l4, overdrive // Added custom overdrive level
+
     var cardCount: Int {
         switch self {
         case .l1: return 3
         case .l2: return 4
         case .l3: return 6
         case .l4: return 9
+        case .overdrive: return 9
         }
     }
-    var litCount: Int { self == .l4 ? 2 : 1 }
+
+    // Overdrive forces you to track 3 targets at once!
+    var litCount: Int {
+        switch self {
+        case .overdrive: return 3
+        case .l4: return 2
+        default: return 1
+        }
+    }
+
+    // Reaction time speeds up drastically
     var litWindow: Double {
         switch self {
         case .l1: return 1.5
         case .l2: return 1.2
-        case .l3: return 1.0
-        case .l4: return 0.8
+        case .l3: return 0.9
+        case .l4: return 0.65
+        case .overdrive: return 0.4 // Pure chaos
         }
     }
+
     var columns: Int {
         switch self {
         case .l1: return 3
         case .l2: return 2
         case .l3: return 3
-        case .l4: return 3
+        case .l4, .overdrive: return 3
         }
     }
+
     var glowColor: Color {
         switch self {
         case .l1: return .green
         case .l2: return .cyan
         case .l3: return .yellow
-        case .l4: return .red
+        case .l4: return .orange
+        case .overdrive: return .red
         }
     }
 }
@@ -48,6 +64,7 @@ struct LightItUpView: View {
     @State private var gameOver = false
     @State private var level: GameLevel = .l1
     @State private var showLevelFlash = false
+    @State private var pulseBackground = false // Controls the panic background
 
     @AppStorage("lightItUpHighScore") private var highScore = 0
     @Environment(\.dismiss) private var dismiss
@@ -58,11 +75,20 @@ struct LightItUpView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Deep dark background
+                // Base background
                 Color(red: 0.05, green: 0.05, blue: 0.08).ignoresSafeArea()
                 
+                // Panic Mode Pulsing Background
+                if level == .overdrive {
+                    Color.red.opacity(pulseBackground ? 0.3 : 0.05)
+                        .ignoresSafeArea()
+                        .animation(.easeInOut(duration: 0.3).repeatForever(), value: pulseBackground)
+                        .onAppear { pulseBackground = true }
+                }
+                
+                // Level-up flash
                 if showLevelFlash {
-                    level.glowColor.opacity(0.3)
+                    level.glowColor.opacity(0.4)
                         .ignoresSafeArea()
                         .zIndex(10)
                         .transition(.opacity)
@@ -106,10 +132,10 @@ struct LightItUpView: View {
                             VStack(spacing: 4) {
                                 Text("TIME")
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(level == .overdrive ? .red : .white.opacity(0.5))
                                 Text("\(timeRemaining)")
                                     .font(.system(size: 24, weight: .black, design: .rounded))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(level == .overdrive ? .red : .white)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -117,8 +143,8 @@ struct LightItUpView: View {
 
                         // Level Indicator
                         HStack(spacing: 10) {
-                            Text("LEVEL \(levelLabel)")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            Text(level == .overdrive ? "⚠️ OVERDRIVE ⚠️" : "LEVEL \(levelLabel)")
+                                .font(.system(size: 16, weight: .black, design: .monospaced))
                                 .foregroundColor(level.glowColor)
                                 .shadow(color: level.glowColor.opacity(0.8), radius: 5)
                         }
@@ -128,14 +154,13 @@ struct LightItUpView: View {
                         .cornerRadius(20)
                         .overlay(RoundedRectangle(cornerRadius: 20).stroke(level.glowColor.opacity(0.3), lineWidth: 1))
 
-                        // Grid
+                        // Game Grid
                         LazyVGrid(
                             columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: level.columns),
                             spacing: 15
                         ) {
                             ForEach(cards) { card in
                                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    // Neon effect logic
                                     .fill(card.isLit ? .white : Color.white.opacity(0.05))
                                     .frame(height: 110)
                                     .overlay(
@@ -144,7 +169,8 @@ struct LightItUpView: View {
                                     )
                                     .shadow(color: card.isLit ? level.glowColor : .clear, radius: card.isLit ? 15 : 0)
                                     .shadow(color: card.isLit ? level.glowColor.opacity(0.5) : .clear, radius: 30)
-                                    .scaleEffect(card.isLit ? 1.05 : 1.0)
+                                    // Make cards slightly smaller in Overdrive to make tapping harder
+                                    .scaleEffect(card.isLit ? 1.05 : (level == .overdrive ? 0.9 : 1.0))
                                     .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.6), value: card.isLit)
                                     .onTapGesture { handleTap(card) }
                             }
@@ -161,16 +187,24 @@ struct LightItUpView: View {
         .onAppear { startGame() }
         .onReceive(roundTimer) { _ in
             guard !gameOver else { return }
+            
             if timeRemaining > 0 {
                 timeRemaining -= 1
                 updateLevel()
+                
+                // Haptic Heartbeat during Overdrive
+                if timeRemaining <= 10 {
+                    let generator = UIImpactFeedbackGenerator(style: .heavy)
+                    generator.impactOccurred()
+                }
+                
             } else {
                 endGame()
             }
         }
     }
     
-    // Extracted Game Over Menu for cleaner code
+    // MARK: - Game Over Menu
     var gameOverMenu: some View {
         VStack(spacing: 20) {
             Text(lives <= 0 ? "GAME OVER" : "TIME'S UP")
@@ -226,12 +260,13 @@ struct LightItUpView: View {
     // MARK: - Helpers
     var levelLabel: String {
         switch level {
-        case .l1: return "1"; case .l2: return "2"; case .l3: return "3"; case .l4: return "4"
+        case .l1: return "1"; case .l2: return "2"; case .l3: return "3"; case .l4: return "4"; case .overdrive: return "MAX"
         }
     }
 
     func startGame() {
         level = .l1
+        pulseBackground = false
         rebuildCards()
         startLitTimer()
     }
@@ -269,7 +304,6 @@ struct LightItUpView: View {
     func handleTap(_ card: Card) {
         guard !gameOver, let index = cards.firstIndex(where: { $0.id == card.id }) else { return }
         
-        // Haptic feedback
         let generator = UIImpactFeedbackGenerator(style: cards[index].isLit ? .heavy : .rigid)
         generator.impactOccurred()
         
@@ -287,11 +321,14 @@ struct LightItUpView: View {
     func updateLevel() {
         let elapsed = 60 - timeRemaining
         let newLevel: GameLevel
+        
+        // Custom progression pacing
         switch elapsed {
-        case 0..<15:  newLevel = .l1
-        case 15..<30: newLevel = .l2
-        case 30..<45: newLevel = .l3
-        default:      newLevel = .l4
+        case 0..<15:  newLevel = .l1       // 60s - 45s
+        case 15..<30: newLevel = .l2       // 45s - 30s
+        case 30..<40: newLevel = .l3       // 30s - 20s
+        case 40..<50: newLevel = .l4       // 20s - 10s
+        default:      newLevel = .overdrive // Last 10 seconds!
         }
         
         if newLevel != level {
@@ -309,6 +346,7 @@ struct LightItUpView: View {
         litTimer?.cancel()
         if score > highScore { highScore = score }
         gameOver = true
+        pulseBackground = false
     }
 
     func restartGame() {
@@ -316,6 +354,7 @@ struct LightItUpView: View {
         timeRemaining = 60
         lives = 3
         gameOver = false
+        pulseBackground = false
         startGame()
     }
 }
