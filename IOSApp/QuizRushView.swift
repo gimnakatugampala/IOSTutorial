@@ -144,6 +144,9 @@ struct QuizRushView: View {
     @StateObject private var viewModel = QuizRushViewModel()
     @Environment(\.dismiss) private var dismiss
     
+    @AppStorage("quizRushHighScore") private var highScore = 0
+    
+    
     var body: some View {
         ZStack {
             // Background
@@ -300,6 +303,11 @@ struct QuizRushView: View {
             Text("QUIZ COMPLETE!")
                 .font(.system(size: 32, weight: .black, design: .rounded))
                 .foregroundColor(.purple)
+            
+            if viewModel.score > highScore {
+                    let _ = DispatchQueue.main.async { highScore = viewModel.score }
+                    Text("🏆 New High Score!").foregroundColor(.yellow)
+                }
             
             Text("Final Score")
                 .foregroundColor(.gray)

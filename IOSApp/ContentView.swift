@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var buttonPosition = CGPoint(x: 200, y: 400)
     @State private var buttonSize: CGFloat = 200
     
+    // High Score Persistence
     @AppStorage("tapFrenzyHighScore") private var highScore = 0
     @Environment(\.dismiss) private var dismiss
 
@@ -19,7 +20,7 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Refined Dark Gradient Background
+                // Background
                 LinearGradient(
                     colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color.purple.opacity(0.3)],
                     startPoint: .top,
@@ -50,22 +51,16 @@ struct ContentView: View {
                         let generator = UIImpactFeedbackGenerator(style: .medium)
                         generator.impactOccurred()
                         score += 1
+                        
+                        withAnimation(.spring()) {
+                            if buttonSize > 50 { buttonSize -= 10 }
+                        }
                     } label: {
                         ZStack {
                             Circle()
-                                .fill(
-                                    RadialGradient(
-                                        gradient: Gradient(colors: [.pink, .red.opacity(0.8)]),
-                                        center: .topLeading,
-                                        startRadius: 10,
-                                        endRadius: buttonSize
-                                    )
-                                )
-                            
-                            // 3D Highlight Effect
+                                .fill(RadialGradient(gradient: Gradient(colors: [.pink, .red.opacity(0.8)]), center: .topLeading, startRadius: 10, endRadius: buttonSize))
                             Circle()
                                 .strokeBorder(LinearGradient(colors: [.white.opacity(0.6), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 4)
-                            
                             Text("TAP")
                                 .font(.system(size: buttonSize * 0.25, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
@@ -86,13 +81,12 @@ struct ContentView: View {
             }
             .onReceive(timer) { _ in
                 guard timeRemaining > 0 else {
+                    // Update High Score on Game Over
                     if score > highScore { highScore = score }
                     gameOver = true
                     return
                 }
-
                 timeRemaining -= 1
-                
                 withAnimation(.easeInOut(duration: 1.0)) {
                     buttonSize = 50 + CGFloat(timeRemaining) * 15
                 }
@@ -101,7 +95,6 @@ struct ContentView: View {
                 if !gameOver {
                     let x = CGFloat.random(in: 60...(geometry.size.width - 60))
                     let y = CGFloat.random(in: 180...(geometry.size.height - 150))
-
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                         buttonPosition = CGPoint(x: x, y: y)
                     }
@@ -115,7 +108,6 @@ struct ContentView: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundColor(color)
-            
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 10, weight: .bold)).foregroundColor(.white.opacity(0.6))
                 Text(value).font(.system(size: 20, weight: .black, design: .rounded)).foregroundColor(.white)
@@ -133,9 +125,7 @@ struct ContentView: View {
         VStack(spacing: 25) {
             Image(systemName: "trophy.fill")
                 .font(.system(size: 70))
-                .foregroundStyle(
-                    LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom)
-                )
+                .foregroundStyle(LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom))
                 .shadow(color: .orange.opacity(0.5), radius: 10)
 
             Text("GAME OVER")
@@ -143,26 +133,20 @@ struct ContentView: View {
                 .foregroundColor(.white)
 
             VStack(spacing: 5) {
-                Text("Final Score")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.7))
-                Text("\(score)")
-                    .font(.system(size: 60, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
+                Text("Final Score").font(.subheadline).foregroundColor(.white.opacity(0.7))
+                Text("\(score)").font(.system(size: 60, weight: .black, design: .rounded)).foregroundColor(.white)
             }
             
-            if score >= highScore && score > 0 {
-                Text("🏆 New High Score!")
-                    .font(.headline)
-                    .foregroundColor(.yellow)
-            } else {
-                Text("Best: \(highScore)")
-                    .font(.headline)
-                    .foregroundColor(.white.opacity(0.5))
-            }
+            Text(score >= highScore ? "🏆 New High Score!" : "Best: \(highScore)")
+                .font(.headline)
+                .foregroundColor(score >= highScore ? .yellow : .white.opacity(0.5))
 
             VStack(spacing: 15) {
-                Button { restartGame(in: geometry) } label: {
+                Button {
+                    // Update High Score before restarting
+                    if score > highScore { highScore = score }
+                    restartGame(in: geometry)
+                } label: {
                     Text("Play Again")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -170,7 +154,6 @@ struct ContentView: View {
                         .background(LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing))
                         .foregroundColor(.white)
                         .cornerRadius(16)
-                        .shadow(color: .green.opacity(0.4), radius: 10, y: 5)
                 }
                 
                 Button { dismiss() } label: {
@@ -184,14 +167,12 @@ struct ContentView: View {
                         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.2), lineWidth: 1))
                 }
             }
-            .padding(.top, 10)
         }
         .padding(40)
         .background(.ultraThinMaterial)
         .background(Color.black.opacity(0.4))
         .cornerRadius(30)
         .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.2), lineWidth: 1))
-        .shadow(radius: 30)
         .padding(.horizontal, 30)
     }
 
@@ -201,11 +182,5 @@ struct ContentView: View {
         gameOver = false
         buttonSize = 200
         buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-    }
-}
-
-#Preview {
-    NavigationStack {
-        ContentView()
     }
 }

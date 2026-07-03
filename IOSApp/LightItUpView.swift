@@ -3,7 +3,7 @@ import Combine
 
 // MARK: - Level config
 enum GameLevel {
-    case l1, l2, l3, l4, overdrive // Added custom overdrive level
+    case l1, l2, l3, l4, overdrive
 
     var cardCount: Int {
         switch self {
@@ -15,7 +15,6 @@ enum GameLevel {
         }
     }
 
-    // Overdrive forces you to track 3 targets at once!
     var litCount: Int {
         switch self {
         case .overdrive: return 3
@@ -24,14 +23,13 @@ enum GameLevel {
         }
     }
 
-    // Reaction time speeds up drastically
     var litWindow: Double {
         switch self {
         case .l1: return 1.5
         case .l2: return 1.2
         case .l3: return 0.9
         case .l4: return 0.65
-        case .overdrive: return 0.4 // Pure chaos
+        case .overdrive: return 0.4
         }
     }
 
@@ -57,6 +55,7 @@ enum GameLevel {
 
 // MARK: - LightItUpView
 struct LightItUpView: View {
+    // FIXED: Added @State initialization for lives
     @State private var timeRemaining = 60
     @State private var score = 0
     @State private var lives = 3
@@ -64,7 +63,7 @@ struct LightItUpView: View {
     @State private var gameOver = false
     @State private var level: GameLevel = .l1
     @State private var showLevelFlash = false
-    @State private var pulseBackground = false // Controls the panic background
+    @State private var pulseBackground = false
 
     @AppStorage("lightItUpHighScore") private var highScore = 0
     @Environment(\.dismiss) private var dismiss
@@ -75,10 +74,9 @@ struct LightItUpView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Base background
                 Color(red: 0.05, green: 0.05, blue: 0.08).ignoresSafeArea()
                 
-                // Panic Mode Pulsing Background
+                // Panic Mode
                 if level == .overdrive {
                     Color.red.opacity(pulseBackground ? 0.3 : 0.05)
                         .ignoresSafeArea()
@@ -86,7 +84,6 @@ struct LightItUpView: View {
                         .onAppear { pulseBackground = true }
                 }
                 
-                // Level-up flash
                 if showLevelFlash {
                     level.glowColor.opacity(0.4)
                         .ignoresSafeArea()
@@ -98,88 +95,31 @@ struct LightItUpView: View {
                     gameOverMenu
                 } else {
                     VStack(spacing: 20) {
-                        // HUD
-                        HStack {
-                            Button { dismiss() } label: {
-                                Image(systemName: "chevron.left.circle.fill")
-                                    .font(.title)
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(spacing: 4) {
-                                Text("SCORE")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text("\(score)")
-                                    .font(.system(size: 24, weight: .black, design: .rounded))
-                                    .foregroundColor(.white)
-                            }
-                            
-                            Spacer()
-                            
-                            HStack(spacing: 4) {
-                                ForEach(0..<3, id: \.self) { i in
-                                    Image(systemName: "heart.fill")
-                                        .foregroundColor(i < lives ? .red : .white.opacity(0.1))
-                                        .shadow(color: i < lives ? .red.opacity(0.5) : .clear, radius: 5)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(spacing: 4) {
-                                Text("TIME")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(level == .overdrive ? .red : .white.opacity(0.5))
-                                Text("\(timeRemaining)")
-                                    .font(.system(size: 24, weight: .black, design: .rounded))
-                                    .foregroundColor(level == .overdrive ? .red : .white)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-
+                        hudView
+                        
                         // Level Indicator
-                        HStack(spacing: 10) {
-                            Text(level == .overdrive ? "⚠️ OVERDRIVE ⚠️" : "LEVEL \(levelLabel)")
-                                .font(.system(size: 16, weight: .black, design: .monospaced))
-                                .foregroundColor(level.glowColor)
-                                .shadow(color: level.glowColor.opacity(0.8), radius: 5)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 20)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(20)
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(level.glowColor.opacity(0.3), lineWidth: 1))
+                        Text(level == .overdrive ? "⚠️ OVERDRIVE ⚠️" : "LEVEL \(levelLabel)")
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .foregroundColor(level.glowColor)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 20)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(20)
 
-                        // Game Grid
-                        LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: level.columns),
-                            spacing: 15
-                        ) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: level.columns), spacing: 15) {
                             ForEach(cards) { card in
                                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                                     .fill(card.isLit ? .white : Color.white.opacity(0.05))
                                     .frame(height: 110)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                            .stroke(card.isLit ? level.glowColor : .white.opacity(0.1), lineWidth: card.isLit ? 4 : 1)
-                                    )
+                                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(card.isLit ? level.glowColor : .white.opacity(0.1), lineWidth: card.isLit ? 4 : 1))
                                     .shadow(color: card.isLit ? level.glowColor : .clear, radius: card.isLit ? 15 : 0)
-                                    .shadow(color: card.isLit ? level.glowColor.opacity(0.5) : .clear, radius: 30)
-                                    // Make cards slightly smaller in Overdrive to make tapping harder
                                     .scaleEffect(card.isLit ? 1.05 : (level == .overdrive ? 0.9 : 1.0))
-                                    .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.6), value: card.isLit)
                                     .onTapGesture { handleTap(card) }
                             }
                         }
                         .padding(.horizontal, 25)
-                        
                         Spacer()
                     }
-                    .padding(.top, 10)
                 }
             }
         }
@@ -187,77 +127,39 @@ struct LightItUpView: View {
         .onAppear { startGame() }
         .onReceive(roundTimer) { _ in
             guard !gameOver else { return }
-            
             if timeRemaining > 0 {
                 timeRemaining -= 1
                 updateLevel()
-                
-                // Haptic Heartbeat during Overdrive
-                if timeRemaining <= 10 {
-                    let generator = UIImpactFeedbackGenerator(style: .heavy)
-                    generator.impactOccurred()
+                if timeRemaining <= 10 && level == .overdrive {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                 }
-                
             } else {
                 endGame()
             }
         }
     }
     
-    // MARK: - Game Over Menu
-    var gameOverMenu: some View {
-        VStack(spacing: 20) {
-            Text(lives <= 0 ? "GAME OVER" : "TIME'S UP")
-                .font(.system(size: 32, weight: .black, design: .rounded))
-                .foregroundColor(.white)
-            
-            Text("Score: \(score)")
-                .font(.title2).bold().foregroundColor(.white)
-            
-            if score >= highScore && score > 0 {
-                Text("🏆 New High Score!")
-                    .font(.headline)
-                    .foregroundColor(.yellow)
-            } else {
-                Text("Best: \(highScore)")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            
-            VStack(spacing: 15) {
-                Button { restartGame() } label: {
-                    Text("Play Again")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(level.glowColor)
-                        .foregroundColor(.black)
-                        .cornerRadius(16)
-                        .shadow(color: level.glowColor.opacity(0.5), radius: 10, y: 5)
-                }
-                
-                Button { dismiss() } label: {
-                    Text("Main Menu")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(.ultraThinMaterial)
-                        .foregroundColor(.white)
-                        .cornerRadius(16)
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.2), lineWidth: 1))
-                }
-            }
-            .padding(.top, 20)
-        }
-        .padding(40)
-        .background(.ultraThinMaterial)
-        .background(Color.black.opacity(0.6))
-        .cornerRadius(30)
-        .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.2), lineWidth: 1))
-        .padding(.horizontal, 30)
+    var hudView: some View {
+        HStack {
+            Button { dismiss() } label: { Image(systemName: "chevron.left.circle.fill").font(.title).foregroundColor(.white.opacity(0.6)) }
+            Spacer()
+            VStack { Text("SCORE").font(.system(size: 10, weight: .bold)); Text("\(score)").font(.title2).bold() }
+            Spacer()
+            HStack(spacing: 4) { ForEach(0..<3, id: \.self) { i in Image(systemName: "heart.fill").foregroundColor(i < lives ? .red : .gray) } }
+            Spacer()
+            VStack { Text("TIME").font(.system(size: 10, weight: .bold)); Text("\(timeRemaining)").font(.title2).bold() }
+        }.padding(.horizontal, 20)
     }
 
-    // MARK: - Helpers
+    var gameOverMenu: some View {
+        VStack(spacing: 20) {
+            Text(lives <= 0 ? "GAME OVER" : "TIME'S UP").font(.largeTitle).bold()
+            Text("Score: \(score)").font(.title)
+            Button("Play Again") { restartGame() }.padding().background(Color.blue).cornerRadius(10)
+            Button("Main Menu") { dismiss() }.padding().background(Color.gray).cornerRadius(10)
+        }
+    }
+
     var levelLabel: String {
         switch level {
         case .l1: return "1"; case .l2: return "2"; case .l3: return "3"; case .l4: return "4"; case .overdrive: return "MAX"
@@ -266,77 +168,55 @@ struct LightItUpView: View {
 
     func startGame() {
         level = .l1
-        pulseBackground = false
+        lives = 3
         rebuildCards()
         startLitTimer()
     }
 
-    func rebuildCards() {
-        cards = (0..<level.cardCount).map { Card(id: $0) }
-    }
-
+    func rebuildCards() { cards = (0..<level.cardCount).map { Card(id: $0) } }
+    
     func startLitTimer() {
         litTimer?.cancel()
-        litTimer = Timer.publish(every: level.litWindow, on: .main, in: .common)
-            .autoconnect()
-            .sink { _ in lightUpCards() }
+        litTimer = Timer.publish(every: level.litWindow, on: .main, in: .common).autoconnect().sink { _ in lightUpCards() }
     }
 
     func lightUpCards() {
         guard !gameOver else { return }
-        
-        let missedCards = cards.filter { $0.isLit }.count
-        if missedCards > 0 {
-            withAnimation {
-                lives -= missedCards
-                if lives <= 0 { endGame() }
-            }
+        let missed = cards.filter { $0.isLit }.count
+        if missed > 0 {
+            lives -= missed
+            if lives <= 0 { endGame() }
         }
-        
         guard !gameOver else { return }
-
         for i in cards.indices { cards[i].isLit = false }
-        
-        let picks = (0..<cards.count).shuffled().prefix(level.litCount)
-        for i in picks { cards[i].isLit = true }
+        cards.shuffled().prefix(level.litCount).forEach { cards[$0.id].isLit = true }
     }
 
     func handleTap(_ card: Card) {
-        guard !gameOver, let index = cards.firstIndex(where: { $0.id == card.id }) else { return }
-        
-        let generator = UIImpactFeedbackGenerator(style: cards[index].isLit ? .heavy : .rigid)
-        generator.impactOccurred()
-        
-        withAnimation {
-            if cards[index].isLit {
-                score += 1
-                cards[index].isLit = false
-            } else {
-                lives -= 1
-                if lives <= 0 { endGame() }
-            }
+        guard !gameOver else { return }
+        if cards[card.id].isLit {
+            score += 1
+            cards[card.id].isLit = false
+        } else {
+            lives -= 1
+            if lives <= 0 { endGame() }
         }
     }
 
     func updateLevel() {
         let elapsed = 60 - timeRemaining
         let newLevel: GameLevel
-        
-        // Custom progression pacing
         switch elapsed {
-        case 0..<15:  newLevel = .l1       // 60s - 45s
-        case 15..<30: newLevel = .l2       // 45s - 30s
-        case 30..<40: newLevel = .l3       // 30s - 20s
-        case 40..<50: newLevel = .l4       // 20s - 10s
-        default:      newLevel = .overdrive // Last 10 seconds!
+        case 0..<15: newLevel = .l1
+        case 15..<30: newLevel = .l2
+        case 30..<40: newLevel = .l3
+        case 40..<50: newLevel = .l4
+        default: newLevel = .overdrive
         }
-        
         if newLevel != level {
             level = newLevel
-            withAnimation(.easeInOut(duration: 0.1)) { showLevelFlash = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.easeInOut(duration: 0.2)) { showLevelFlash = false }
-            }
+            showLevelFlash = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { showLevelFlash = false }
             rebuildCards()
             startLitTimer()
         }
@@ -346,21 +226,9 @@ struct LightItUpView: View {
         litTimer?.cancel()
         if score > highScore { highScore = score }
         gameOver = true
-        pulseBackground = false
     }
 
     func restartGame() {
-        score = 0
-        timeRemaining = 60
-        lives = 3
-        gameOver = false
-        pulseBackground = false
-        startGame()
-    }
-}
-
-#Preview {
-    NavigationStack {
-        LightItUpView()
+        score = 0; timeRemaining = 60; lives = 3; gameOver = false; startGame()
     }
 }
