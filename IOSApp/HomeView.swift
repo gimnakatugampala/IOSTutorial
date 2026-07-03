@@ -60,30 +60,42 @@ struct HomeView: View {
                     .padding(.top, 50)
                     
                     // Game Buttons with Staggered Entrance
-                    VStack(spacing: 25) {
-                        NavigationLink(destination: ContentView()) {
-                            GameMenuButton(
-                                title: "Tap Frenzy",
-                                icon: "hand.tap.fill",
-                                gradientColors: [.blue, .purple]
-                            )
+                        VStack(spacing: 25) {
+                            NavigationLink(destination: ContentView()) {
+                                GameMenuButton(
+                                    title: "Tap Frenzy",
+                                    icon: "hand.tap.fill",
+                                    gradientColors: [.blue, .purple]
+                                )
+                            }
+                            .offset(y: showButtons ? 0 : 50)
+                            .opacity(showButtons ? 1 : 0)
+                            .animation(.easeOut(duration: 0.8).delay(0.2), value: showButtons)
+                            
+                            NavigationLink(destination: LightItUpView()) {
+                                GameMenuButton(
+                                    title: "Light It Up",
+                                    icon: "lightbulb.max.fill",
+                                    gradientColors: [.orange, .red, .pink]
+                                )
+                            }
+                            .offset(y: showButtons ? 0 : 50)
+                            .opacity(showButtons ? 1 : 0)
+                            .animation(.easeOut(duration: 0.8).delay(0.4), value: showButtons)
+                            
+                            // NEW QUIZ RUSH BUTTON
+                            NavigationLink(destination: QuizRushView()) {
+                                GameMenuButton(
+                                    title: "Quiz Rush",
+                                    icon: "questionmark.bubble.fill",
+                                    gradientColors: [.purple, .indigo, .cyan]
+                                )
+                            }
+                            .offset(y: showButtons ? 0 : 50)
+                            .opacity(showButtons ? 1 : 0)
+                            .animation(.easeOut(duration: 0.8).delay(0.6), value: showButtons)
                         }
-                        .offset(y: showButtons ? 0 : 50)
-                        .opacity(showButtons ? 1 : 0)
-                        .animation(.easeOut(duration: 0.8).delay(0.2), value: showButtons)
-                        
-                        NavigationLink(destination: LightItUpView()) {
-                            GameMenuButton(
-                                title: "Light It Up",
-                                icon: "lightbulb.max.fill",
-                                gradientColors: [.orange, .red, .pink]
-                            )
-                        }
-                        .offset(y: showButtons ? 0 : 50)
-                        .opacity(showButtons ? 1 : 0)
-                        .animation(.easeOut(duration: 0.8).delay(0.4), value: showButtons)
-                    }
-                    .padding(.horizontal, 30)
+                        .padding(.horizontal, 30)
                     
                     Spacer()
                 }

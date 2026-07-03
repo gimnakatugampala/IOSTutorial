@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		D714B8EB2FD4347800B4D610 /* IOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = IOSApp.app; path = "/Users/student3/dev/IOSApp/build/Debug-iphoneos/IOSApp.app"; sourceTree = "<absolute>"; };
+		D7012E092FF7EE5800299CE3 /* IOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +33,7 @@
 			isa = PBXGroup;
 			children = (
 				D73C5C7D2FE57C6900725D9D /* IOSApp */,
+				D7012E092FF7EE5800299CE3 /* IOSApp.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -58,7 +59,7 @@
 			packageProductDependencies = (
 			);
 			productName = IOSApp;
-			productReference = D714B8EB2FD4347800B4D610 /* IOSApp.app */;
+			productReference = D7012E092FF7EE5800299CE3 /* IOSApp.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
