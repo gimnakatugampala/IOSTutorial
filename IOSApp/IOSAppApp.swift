@@ -4,7 +4,7 @@ import SwiftUI
 struct IOSAppApp: App {
     var body: some Scene {
         WindowGroup {
-            HomeView()  // ← change this
+            HomeView() // Ensure this is HomeView, not ContentView
         }
     }
 }

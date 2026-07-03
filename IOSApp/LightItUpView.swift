@@ -48,11 +48,16 @@ enum GameLevel {
 struct LightItUpView: View {
     @State private var timeRemaining = 60
     @State private var score = 0
+    @State private var lives = 3
     @State private var cards: [Card] = []
     @State private var gameOver = false
     @State private var level: GameLevel = .l1
+    @State private var showLevelFlash = false
 
     @AppStorage("lightItUpHighScore") private var highScore = 0
+    
+    // Dismiss environment variable for main menu navigation
+    @Environment(\.dismiss) private var dismiss
 
     let roundTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var litTimer: AnyCancellable? = nil
@@ -61,35 +66,77 @@ struct LightItUpView: View {
         GeometryReader { geometry in
             ZStack {
                 Color(red: 0.1, green: 0.1, blue: 0.15).ignoresSafeArea()
+                
+                // Level-up flash overlay challenge
+                if showLevelFlash {
+                    Color.white.opacity(0.8)
+                        .ignoresSafeArea()
+                        .zIndex(10)
+                        .transition(.opacity)
+                }
 
                 if gameOver {
                     VStack(spacing: 20) {
-                        Text("Time's Up!")
+                        Text(lives <= 0 ? "Out of Lives!" : "Time's Up!")
                             .font(.largeTitle).bold().foregroundColor(.white)
                         Text("Score: \(score)")
                             .font(.title).foregroundColor(.white)
-                        if score >= highScore {
+                        if score >= highScore && score > 0 {
                             Text("🏆 New High Score!")
                                 .foregroundColor(.yellow)
                         } else {
                             Text("Best: \(highScore)")
                                 .foregroundColor(.gray)
                         }
+                        
                         Button("Play Again") { restartGame() }
                             .padding()
+                            .frame(maxWidth: 200)
                             .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                            
+                        Button("Main Menu") { dismiss() }
+                            .padding()
+                            .frame(maxWidth: 200)
+                            .background(Color.gray)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     VStack(spacing: 16) {
+                        // TOP BAR WITH BACK BUTTON
                         HStack {
+                            // BACK / EXIT BUTTON DURING GAMEPLAY
+                            Button {
+                                dismiss()
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.title2.bold())
+                                    .foregroundColor(.white)
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.15))
+                                    .clipShape(Circle())
+                            }
+
                             Text("Score: \(score)")
-                                .font(.title2).bold().foregroundColor(.white)
+                                .font(.title3).bold().foregroundColor(.white)
+                            
                             Spacer()
-                            Text("Time: \(timeRemaining)s")
-                                .font(.title2).foregroundColor(.white)
+                            
+                            // 3 Lives System UI
+                            HStack(spacing: 4) {
+                                ForEach(0..<3) { i in
+                                    Image(systemName: i < lives ? "heart.fill" : "heart")
+                                        .foregroundColor(i < lives ? .red : .gray)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Text("\(timeRemaining)s")
+                                .font(.title3).foregroundColor(.white)
                         }
                         .padding(.horizontal)
 
@@ -119,6 +166,7 @@ struct LightItUpView: View {
         }
         .navigationTitle("Light It Up")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .onAppear { startGame() }
         .onReceive(roundTimer) { _ in
             guard !gameOver else { return }
@@ -159,21 +207,37 @@ struct LightItUpView: View {
     }
 
     func lightUpCards() {
-        // dim all first
+        guard !gameOver else { return }
+        
+        // Handle penalty for missed cards before turning them off
+        let missedCards = cards.filter { $0.isLit }.count
+        if missedCards > 0 {
+            withAnimation {
+                lives -= missedCards
+                if lives <= 0 { endGame() }
+            }
+        }
+        
+        guard !gameOver else { return }
+
+        // Dim all first
         for i in cards.indices { cards[i].isLit = false }
-        // pick random lit cards
+        
+        // Pick random lit cards
         let picks = (0..<cards.count).shuffled().prefix(level.litCount)
         for i in picks { cards[i].isLit = true }
     }
 
     func handleTap(_ card: Card) {
-        guard let index = cards.firstIndex(where: { $0.id == card.id }) else { return }
+        guard !gameOver, let index = cards.firstIndex(where: { $0.id == card.id }) else { return }
         withAnimation {
             if cards[index].isLit {
                 score += 1
                 cards[index].isLit = false
             } else {
-                score = max(0, score - 1)
+                // Wrong tap penalty
+                lives -= 1
+                if lives <= 0 { endGame() }
             }
         }
     }
@@ -187,8 +251,20 @@ struct LightItUpView: View {
         case 30..<45: newLevel = .l3
         default:      newLevel = .l4
         }
+        
         if newLevel != level {
             level = newLevel
+            
+            // Level-up flash animation
+            withAnimation(.easeInOut(duration: 0.1)) {
+                showLevelFlash = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showLevelFlash = false
+                }
+            }
+            
             rebuildCards()
             startLitTimer()
         }
@@ -203,6 +279,7 @@ struct LightItUpView: View {
     func restartGame() {
         score = 0
         timeRemaining = 60
+        lives = 3
         gameOver = false
         startGame()
     }
