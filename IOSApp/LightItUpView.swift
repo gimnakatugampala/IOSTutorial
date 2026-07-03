@@ -4,7 +4,6 @@ import Combine
 // MARK: - Level config
 enum GameLevel {
     case l1, l2, l3, l4
-
     var cardCount: Int {
         switch self {
         case .l1: return 3
@@ -13,9 +12,7 @@ enum GameLevel {
         case .l4: return 9
         }
     }
-
     var litCount: Int { self == .l4 ? 2 : 1 }
-
     var litWindow: Double {
         switch self {
         case .l1: return 1.5
@@ -24,7 +21,6 @@ enum GameLevel {
         case .l4: return 0.8
         }
     }
-
     var columns: Int {
         switch self {
         case .l1: return 3
@@ -33,11 +29,10 @@ enum GameLevel {
         case .l4: return 3
         }
     }
-
     var glowColor: Color {
         switch self {
         case .l1: return .green
-        case .l2: return .blue
+        case .l2: return .cyan
         case .l3: return .yellow
         case .l4: return .red
         }
@@ -55,8 +50,6 @@ struct LightItUpView: View {
     @State private var showLevelFlash = false
 
     @AppStorage("lightItUpHighScore") private var highScore = 0
-    
-    // Dismiss environment variable for main menu navigation
     @Environment(\.dismiss) private var dismiss
 
     let roundTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -65,107 +58,105 @@ struct LightItUpView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(red: 0.1, green: 0.1, blue: 0.15).ignoresSafeArea()
+                // Deep dark background
+                Color(red: 0.05, green: 0.05, blue: 0.08).ignoresSafeArea()
                 
-                // Level-up flash overlay challenge
                 if showLevelFlash {
-                    Color.white.opacity(0.8)
+                    level.glowColor.opacity(0.3)
                         .ignoresSafeArea()
                         .zIndex(10)
                         .transition(.opacity)
                 }
 
                 if gameOver {
-                    VStack(spacing: 20) {
-                        Text(lives <= 0 ? "Out of Lives!" : "Time's Up!")
-                            .font(.largeTitle).bold().foregroundColor(.white)
-                        Text("Score: \(score)")
-                            .font(.title).foregroundColor(.white)
-                        if score >= highScore && score > 0 {
-                            Text("🏆 New High Score!")
-                                .foregroundColor(.yellow)
-                        } else {
-                            Text("Best: \(highScore)")
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Button("Play Again") { restartGame() }
-                            .padding()
-                            .frame(maxWidth: 200)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                            
-                        Button("Main Menu") { dismiss() }
-                            .padding()
-                            .frame(maxWidth: 200)
-                            .background(Color.gray)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    gameOverMenu
                 } else {
-                    VStack(spacing: 16) {
-                        // TOP BAR WITH BACK BUTTON
+                    VStack(spacing: 20) {
+                        // HUD
                         HStack {
-                            // BACK / EXIT BUTTON DURING GAMEPLAY
-                            Button {
-                                dismiss()
-                            } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(.title2.bold())
-                                    .foregroundColor(.white)
-                                    .padding(10)
-                                    .background(Color.white.opacity(0.15))
-                                    .clipShape(Circle())
+                            Button { dismiss() } label: {
+                                Image(systemName: "chevron.left.circle.fill")
+                                    .font(.title)
+                                    .foregroundColor(.white.opacity(0.6))
                             }
-
-                            Text("Score: \(score)")
-                                .font(.title3).bold().foregroundColor(.white)
                             
                             Spacer()
                             
-                            // 3 Lives System UI
+                            VStack(spacing: 4) {
+                                Text("SCORE")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text("\(score)")
+                                    .font(.system(size: 24, weight: .black, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Spacer()
+                            
                             HStack(spacing: 4) {
-                                ForEach(0..<3) { i in
-                                    Image(systemName: i < lives ? "heart.fill" : "heart")
-                                        .foregroundColor(i < lives ? .red : .gray)
+                                ForEach(0..<3, id: \.self) { i in
+                                    Image(systemName: "heart.fill")
+                                        .foregroundColor(i < lives ? .red : .white.opacity(0.1))
+                                        .shadow(color: i < lives ? .red.opacity(0.5) : .clear, radius: 5)
                                 }
                             }
                             
                             Spacer()
                             
-                            Text("\(timeRemaining)s")
-                                .font(.title3).foregroundColor(.white)
+                            VStack(spacing: 4) {
+                                Text("TIME")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text("\(timeRemaining)")
+                                    .font(.system(size: 24, weight: .black, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
                         }
-                        .padding(.horizontal)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
 
-                        Text("Level \(levelLabel)")
-                            .font(.headline)
-                            .foregroundColor(level.glowColor)
+                        // Level Indicator
+                        HStack(spacing: 10) {
+                            Text("LEVEL \(levelLabel)")
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                .foregroundColor(level.glowColor)
+                                .shadow(color: level.glowColor.opacity(0.8), radius: 5)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 20)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(20)
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(level.glowColor.opacity(0.3), lineWidth: 1))
 
+                        // Grid
                         LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: level.columns),
-                            spacing: 12
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: level.columns),
+                            spacing: 15
                         ) {
                             ForEach(cards) { card in
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(card.isLit ? level.glowColor : Color(white: 0.2))
-                                    .frame(height: 100)
-                                    .scaleEffect(card.isLit ? 1.08 : 1.0)
-                                    .shadow(color: card.isLit ? level.glowColor.opacity(0.7) : .clear, radius: 12)
-                                    .animation(.easeInOut(duration: 0.15), value: card.isLit)
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    // Neon effect logic
+                                    .fill(card.isLit ? .white : Color.white.opacity(0.05))
+                                    .frame(height: 110)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                            .stroke(card.isLit ? level.glowColor : .white.opacity(0.1), lineWidth: card.isLit ? 4 : 1)
+                                    )
+                                    .shadow(color: card.isLit ? level.glowColor : .clear, radius: card.isLit ? 15 : 0)
+                                    .shadow(color: card.isLit ? level.glowColor.opacity(0.5) : .clear, radius: 30)
+                                    .scaleEffect(card.isLit ? 1.05 : 1.0)
+                                    .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.6), value: card.isLit)
                                     .onTapGesture { handleTap(card) }
                             }
                         }
-                        .padding(.horizontal)
+                        .padding(.horizontal, 25)
+                        
+                        Spacer()
                     }
-                    .padding(.top)
+                    .padding(.top, 10)
                 }
             }
         }
-        .navigationTitle("Light It Up")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .onAppear { startGame() }
         .onReceive(roundTimer) { _ in
@@ -178,14 +169,64 @@ struct LightItUpView: View {
             }
         }
     }
+    
+    // Extracted Game Over Menu for cleaner code
+    var gameOverMenu: some View {
+        VStack(spacing: 20) {
+            Text(lives <= 0 ? "GAME OVER" : "TIME'S UP")
+                .font(.system(size: 32, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            
+            Text("Score: \(score)")
+                .font(.title2).bold().foregroundColor(.white)
+            
+            if score >= highScore && score > 0 {
+                Text("🏆 New High Score!")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+            } else {
+                Text("Best: \(highScore)")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            
+            VStack(spacing: 15) {
+                Button { restartGame() } label: {
+                    Text("Play Again")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(level.glowColor)
+                        .foregroundColor(.black)
+                        .cornerRadius(16)
+                        .shadow(color: level.glowColor.opacity(0.5), radius: 10, y: 5)
+                }
+                
+                Button { dismiss() } label: {
+                    Text("Main Menu")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(.ultraThinMaterial)
+                        .foregroundColor(.white)
+                        .cornerRadius(16)
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.2), lineWidth: 1))
+                }
+            }
+            .padding(.top, 20)
+        }
+        .padding(40)
+        .background(.ultraThinMaterial)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(30)
+        .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.2), lineWidth: 1))
+        .padding(.horizontal, 30)
+    }
 
     // MARK: - Helpers
     var levelLabel: String {
         switch level {
-        case .l1: return "1"
-        case .l2: return "2"
-        case .l3: return "3"
-        case .l4: return "4"
+        case .l1: return "1"; case .l2: return "2"; case .l3: return "3"; case .l4: return "4"
         }
     }
 
@@ -209,7 +250,6 @@ struct LightItUpView: View {
     func lightUpCards() {
         guard !gameOver else { return }
         
-        // Handle penalty for missed cards before turning them off
         let missedCards = cards.filter { $0.isLit }.count
         if missedCards > 0 {
             withAnimation {
@@ -220,22 +260,24 @@ struct LightItUpView: View {
         
         guard !gameOver else { return }
 
-        // Dim all first
         for i in cards.indices { cards[i].isLit = false }
         
-        // Pick random lit cards
         let picks = (0..<cards.count).shuffled().prefix(level.litCount)
         for i in picks { cards[i].isLit = true }
     }
 
     func handleTap(_ card: Card) {
         guard !gameOver, let index = cards.firstIndex(where: { $0.id == card.id }) else { return }
+        
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: cards[index].isLit ? .heavy : .rigid)
+        generator.impactOccurred()
+        
         withAnimation {
             if cards[index].isLit {
                 score += 1
                 cards[index].isLit = false
             } else {
-                // Wrong tap penalty
                 lives -= 1
                 if lives <= 0 { endGame() }
             }
@@ -254,17 +296,10 @@ struct LightItUpView: View {
         
         if newLevel != level {
             level = newLevel
-            
-            // Level-up flash animation
-            withAnimation(.easeInOut(duration: 0.1)) {
-                showLevelFlash = true
-            }
+            withAnimation(.easeInOut(duration: 0.1)) { showLevelFlash = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showLevelFlash = false
-                }
+                withAnimation(.easeInOut(duration: 0.2)) { showLevelFlash = false }
             }
-            
             rebuildCards()
             startLitTimer()
         }
@@ -282,5 +317,11 @@ struct LightItUpView: View {
         lives = 3
         gameOver = false
         startGame()
+    }
+}
+
+#Preview {
+    NavigationStack {
+        LightItUpView()
     }
 }
