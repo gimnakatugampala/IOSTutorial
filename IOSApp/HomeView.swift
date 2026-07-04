@@ -39,7 +39,7 @@ struct HomeView: View {
                             .offset(y: floatIcon ? -15 : 10)
                             .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: floatIcon)
                         
-                        Text("Game Hub")
+                        Text("Game Center")
                             .font(.system(size: 50, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                     }
