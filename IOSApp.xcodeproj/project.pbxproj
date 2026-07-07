@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		D7012E092FF7EE5800299CE3 /* IOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D7012E092FF7EE5800299CE3 /* IOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = IOSApp.app; path = ../../../../../../../../dev/IOSTutorial/IOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
