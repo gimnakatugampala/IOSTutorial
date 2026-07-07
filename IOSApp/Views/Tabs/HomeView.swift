@@ -55,7 +55,7 @@ struct HomeView: View {
                     
                     // Game Buttons
                     VStack(spacing: 20) {
-                        NavigationLink(destination: ContentView()) { GameMenuButton(title: "Tap Frenzy", icon: "hand.tap.fill", gradientColors: [.blue, .purple]) }
+                        NavigationLink(destination: TapFrenzyView()) { GameMenuButton(title: "Tap Frenzy", icon: "hand.tap.fill", gradientColors: [.blue, .purple]) }
                         NavigationLink(destination: LightItUpView()) { GameMenuButton(title: "Light It Up", icon: "lightbulb.max.fill", gradientColors: [.orange, .red, .pink]) }
                         NavigationLink(destination: QuizRushView()) { GameMenuButton(title: "Quiz Rush", icon: "questionmark.bubble.fill", gradientColors: [.purple, .indigo, .cyan]) }
                     }
@@ -75,35 +75,3 @@ struct HomeView: View {
     }
 }
 
-struct ScoreBadge: View {
-    let title: String
-    let score: Int
-    var body: some View {
-        VStack {
-            Text(title).font(.caption2).foregroundColor(.white.opacity(0.6))
-            Text("\(score)").font(.headline).bold().foregroundColor(.white)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial.opacity(0.5))
-        .cornerRadius(12)
-    }
-}
-
-struct GameMenuButton: View {
-    let title: String
-    let icon: String
-    let gradientColors: [Color]
-    var body: some View {
-        HStack(spacing: 20) {
-            Image(systemName: icon).font(.title).foregroundColor(.white)
-            Text(title).font(.title2).bold().foregroundColor(.white)
-            Spacer()
-            Image(systemName: "chevron.right.circle.fill").font(.title2).foregroundColor(.white.opacity(0.8))
-        }
-        .padding(22)
-        .background(.ultraThinMaterial)
-        .cornerRadius(25)
-        .overlay(RoundedRectangle(cornerRadius: 25).stroke(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5).opacity(0.8))
-    }
-}

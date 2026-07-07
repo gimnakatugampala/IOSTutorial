@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-struct ContentView: View {
+struct TapFrenzyView: View {
 
     @State private var score = 0
     @State private var timeRemaining = 10
