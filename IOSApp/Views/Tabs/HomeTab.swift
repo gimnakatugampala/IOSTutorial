@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct HomeView: View {
+struct HomeTab: View {
     // Animation States
     @State private var animateBackground = false
     @State private var floatIcon = false
