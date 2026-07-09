@@ -88,9 +88,13 @@ struct TapFrenzyView: View {
             .navigationBarBackButtonHidden(true)
             .onAppear {
                 buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                
+                // Start fetching GPS immediately when view loads!
+                locationService.fetchLocation()
+                
                 // Start the game via the ViewModel
                 vm.startGame()
-            }
+                }
             // Listen to the ViewModel's timer to shrink the button
             .onChange(of: vm.timeRemaining) { newValue in
                 withAnimation(.easeInOut(duration: 1.0)) {
@@ -171,8 +175,8 @@ struct TapFrenzyView: View {
         .padding(.horizontal, 30)
         .onAppear {
             if vm.score > highScore { highScore = vm.score }
-            
-            locationService.fetchLocation()
+            buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+           
             statsVM.saveNewSession(
                 mode: .tapFrenzy,
                 score: vm.score,

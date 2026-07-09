@@ -10,7 +10,7 @@ import MapKit
 struct MapTab: View {
     @EnvironmentObject var statsVM: StatsVM
     
-    // 1. Controls what the map is looking at
+    // Starting position
     @State private var position: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612),
@@ -18,17 +18,42 @@ struct MapTab: View {
         )
     )
     
-    // 2. Tracks the exact, real-time camera data from the rendering engine
     @State private var liveCamera: MapCamera?
     
     var body: some View {
         Map(position: $position) {
             ForEach(statsVM.sessions) { session in
-                Marker("\(session.score) pts", coordinate: CLLocationCoordinate2D(latitude: session.latitude, longitude: session.longitude))
-                    .tint(colorFor(mode: session.mode))
+                
+                // 🚨 1. We now use our jittered coordinate function instead of the raw coordinates!
+                Annotation(session.mode.rawValue, coordinate: getJitteredCoordinate(for: session)) {
+                    
+                    VStack(spacing: 0) {
+                        VStack(spacing: 4) {
+                            Text(session.mode.rawValue.uppercased())
+                                .font(.system(size: 10, weight: .black))
+                            
+                            Text("\(session.score) pts")
+                                .font(.system(size: 14, weight: .bold))
+                            
+                            Text(session.timestamp.formatted(date: .numeric, time: .shortened))
+                                .font(.system(size: 9))
+                                .opacity(0.9)
+                        }
+                        .padding(8)
+                        .background(colorFor(mode: session.mode))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                        .shadow(color: .black.opacity(0.3), radius: 5, y: 5)
+                        
+                        Image(systemName: "triangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(colorFor(mode: session.mode))
+                            .rotationEffect(.degrees(180))
+                            .offset(y: -2)
+                    }
+                }
             }
         }
-        // 3. Constantly updates our liveCamera variable whenever the map renders or moves
         .onMapCameraChange(frequency: .continuous) { context in
             liveCamera = context.camera
         }
@@ -46,6 +71,9 @@ struct MapTab: View {
         .navigationBarTitleDisplayMode(.inline)
     }
     
+    // MARK: - Helpers
+    
+    // Returns the correct color based on the game mode
     private func colorFor(mode: GameMode) -> Color {
         switch mode {
         case .tapFrenzy: return .purple
@@ -54,17 +82,30 @@ struct MapTab: View {
         }
     }
     
-    // 4. Now we use the guaranteed liveCamera to calculate the new zoom!
-    private func zoom(by factor: Double) {
-        // If we don't have a live camera yet, do nothing
-        guard let camera = liveCamera else { return }
+    // 🚨 2. The Jitter Logic
+    private func getJitteredCoordinate(for session: GameSession) -> CLLocationCoordinate2D {
+        // We use the unique ID of the session to generate a stable, deterministic random number.
+        // This ensures the pins scatter randomly, but they don't "dance" around every time the screen redraws!
+        let seed = abs(session.id.hashValue)
         
+        // Creates a tiny offset (roughly 20-50 meters)
+        let latOffset = (Double(seed % 1000) - 500) / 100_000.0
+        let lonOffset = (Double((seed / 1000) % 1000) - 500) / 100_000.0
+        
+        return CLLocationCoordinate2D(
+            latitude: session.latitude + latOffset,
+            longitude: session.longitude + lonOffset
+        )
+    }
+    
+    // Zoom logic
+    private func zoom(by factor: Double) {
+        guard let camera = liveCamera else { return }
         withAnimation(.easeInOut(duration: 0.5)) {
-            // Force the map position to update using the live camera's distance
             position = .camera(
                 MapCamera(
                     centerCoordinate: camera.centerCoordinate,
-                    distance: camera.distance * factor, // Multiply or divide the altitude
+                    distance: camera.distance * factor,
                     heading: camera.heading,
                     pitch: camera.pitch
                 )
