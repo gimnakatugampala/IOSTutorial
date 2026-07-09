@@ -8,7 +8,7 @@
 import SwiftUI
 import Charts
 
-class StatsTab: View {
+struct StatsTab: View {
     // This grabs the ViewModel from the app's environment
     @EnvironmentObject var statsVM: StatsVM
     

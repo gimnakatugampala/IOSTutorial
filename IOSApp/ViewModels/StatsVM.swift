@@ -4,8 +4,8 @@
 //
 //  Created by Gimna Katugampala on 2026-07-07.
 //
-
-import Foundation
+import SwiftUI
+import Combine
 
 class StatsVM: ObservableObject {
     // @Published means whenever this array changes, the UI automatically updates
