@@ -8,25 +8,25 @@
 import SwiftUI
 import Charts
 
-struct StatsTab: View {
-    // We will link this to StatsVM to pull real GameSession data later
+class StatsTab: View {
+    // This grabs the ViewModel from the app's environment
+    @EnvironmentObject var statsVM: StatsVM
     
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // SwiftUI Charts Requirement
+                // 1. High Score Bar Chart
                 VStack(alignment: .leading) {
                     Text("High Scores by Mode")
                         .font(.headline)
                         .padding(.horizontal)
                     
                     Chart {
-                        // Dummy data for the template - StatsVM will populate this
-                        BarMark(x: .value("Mode", "Tap Frenzy"), y: .value("Score", 150))
+                        BarMark(x: .value("Mode", "Tap Frenzy"), y: .value("Score", statsVM.highestScore(for: .tapFrenzy)))
                             .foregroundStyle(Color.purple)
-                        BarMark(x: .value("Mode", "Light It Up"), y: .value("Score", 85))
+                        BarMark(x: .value("Mode", "Light It Up"), y: .value("Score", statsVM.highestScore(for: .lightItUp)))
                             .foregroundStyle(Color.orange)
-                        BarMark(x: .value("Mode", "Quiz Rush"), y: .value("Score", 120))
+                        BarMark(x: .value("Mode", "Quiz Rush"), y: .value("Score", statsVM.highestScore(for: .quizRush)))
                             .foregroundStyle(Color.cyan)
                     }
                     .frame(height: 250)
@@ -36,18 +36,38 @@ struct StatsTab: View {
                     .padding(.horizontal)
                 }
                 
-                // Recent Games List Area
+                // 2. Recent Games List
                 VStack(alignment: .leading) {
-                    Text("Recent Sessions")
+                    Text("Recent Sessions (\(statsVM.sessions.count))")
                         .font(.headline)
                         .padding(.horizontal)
                     
-                    List {
-                        Text("GameSession data will appear here")
+                    if statsVM.sessions.isEmpty {
+                        Text("Play a game to see your history here!")
                             .foregroundColor(.gray)
+                            .padding()
+                    } else {
+                        // Loop through all saved sessions
+                        ForEach(statsVM.sessions) { session in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(session.mode.rawValue)
+                                        .font(.headline)
+                                    Text(session.timestamp, format: .dateTime.month().day().hour().minute())
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                                Text("\(session.score) pts")
+                                    .font(.title3)
+                                    .bold()
+                            }
+                            .padding()
+                            .background(Color(UIColor.secondarySystemBackground))
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                        }
                     }
-                    .frame(minHeight: 300)
-                    .listStyle(.plain)
                 }
             }
             .padding(.top)
@@ -59,5 +79,6 @@ struct StatsTab: View {
 #Preview {
     NavigationStack {
         StatsTab()
+            .environmentObject(StatsVM()) // Inject for the preview to work
     }
 }

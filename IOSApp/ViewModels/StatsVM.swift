@@ -5,3 +5,60 @@
 //  Created by Gimna Katugampala on 2026-07-07.
 //
 
+import Foundation
+
+class StatsVM: ObservableObject {
+    // @Published means whenever this array changes, the UI automatically updates
+    @Published var sessions: [GameSession] = []
+    
+    private let saveKey = "PlayHub_SavedSessions"
+    
+    init() {
+        loadSessions()
+    }
+    
+    // Load data from device memory when the app starts
+    func loadSessions() {
+        guard let data = UserDefaults.standard.data(forKey: saveKey) else { return }
+        
+        do {
+            let decoded = try JSONDecoder().decode([GameSession].self, from: data)
+            DispatchQueue.main.async {
+                // Sort by newest first
+                self.sessions = decoded.sorted { $0.timestamp > $1.timestamp }
+            }
+        } catch {
+            print("Failed to decode sessions: \(error)")
+        }
+    }
+    
+    // Call this function whenever a game finishes
+    func saveNewSession(mode: GameMode, score: Int, lat: Double, lon: Double) {
+        let newSession = GameSession(
+            mode: mode,
+            score: score,
+            timestamp: Date(),
+            latitude: lat,
+            longitude: lon
+        )
+        
+        sessions.insert(newSession, at: 0) // Add to the top of the list
+        persistData()
+    }
+    
+    // Encode the array into JSON and save to UserDefaults
+    private func persistData() {
+        do {
+            let encoded = try JSONEncoder().encode(sessions)
+            UserDefaults.standard.set(encoded, forKey: saveKey)
+        } catch {
+            print("Failed to encode sessions: \(error)")
+        }
+    }
+    
+    // Helper function for the charts: Get the highest score for a specific mode
+    func highestScore(for mode: GameMode) -> Int {
+        let modeSessions = sessions.filter { $0.mode == mode }
+        return modeSessions.map { $0.score }.max() ?? 0
+    }
+}
