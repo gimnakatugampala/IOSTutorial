@@ -32,20 +32,26 @@ struct QuizRushView: View {
                 }.padding()
                 
                 switch viewModel.state {
+                case .selectingCategory:
+                    categorySelectionMenu
+                    
                 case .loading:
                     Spacer()
                     ProgressView().scaleEffect(2).tint(.purple)
-                    Text("Fetching Live Trivia...").foregroundColor(.white.opacity(0.7)).padding(.top, 20)
+                    Text("Fetching \(viewModel.selectedCategory.displayName) Trivia...").foregroundColor(.white.opacity(0.7)).padding(.top, 20)
                     Spacer()
                     
                 case .failed:
                     Spacer()
                     Image(systemName: "wifi.exclamationmark").font(.system(size: 60)).foregroundColor(.red)
                     Text("Network Error").font(.title2).bold().foregroundColor(.white).padding(.top)
-                    Text("Could not reach Open Trivia DB.").foregroundColor(.gray)
+                    Text("Could not reach Open Trivia DB, or this genre is out of questions.").multilineTextAlignment(.center).foregroundColor(.gray).padding(.horizontal, 40)
                     Button { Task { await viewModel.loadQuestions() } } label: {
                         Text("Retry").bold().padding().frame(maxWidth: 200).background(Color.purple).foregroundColor(.white).cornerRadius(12)
                     }.padding(.top, 20)
+                    Button { viewModel.backToCategorySelection() } label: {
+                        Text("Choose a Different Genre").foregroundColor(.gray)
+                    }.padding(.top, 4)
                     Spacer()
                     
                 case .loaded:
@@ -55,12 +61,55 @@ struct QuizRushView: View {
         }
         .navigationBarBackButtonHidden(true)
         .task {
-            // 🚨 2. Fetch GPS in the background while loading questions
+            // 🚨 2. Fetch GPS in the background while the player picks a genre
             locationService.fetchLocation()
-            await viewModel.loadQuestions()
         }
     }
     
+    var categorySelectionMenu: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(spacing: 6) {
+                    Text("Choose a Genre")
+                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .foregroundColor(.white)
+                    Text("Questions are pulled live from Open Trivia DB")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .padding(.top, 10)
+
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
+                    ForEach(QuizCategory.allCases) { category in
+                        Button {
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            viewModel.selectCategory(category)
+                        } label: {
+                            VStack(spacing: 10) {
+                                Image(systemName: category.icon)
+                                    .font(.system(size: 26))
+                                Text(category.displayName)
+                                    .font(.subheadline).bold()
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, minHeight: 100)
+                            .padding(.horizontal, 8)
+                            .background(category.color.opacity(0.22))
+                            .cornerRadius(18)
+                            .overlay(RoundedRectangle(cornerRadius: 18).stroke(category.color.opacity(0.7), lineWidth: 1.5))
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 30)
+            }
+        }
+    }
+
     var gamePlayView: some View {
         VStack(spacing: 25) {
             HStack {
@@ -75,9 +124,18 @@ struct QuizRushView: View {
                 }
             }.padding(.horizontal)
             
-            Text("Question \(viewModel.currentIndex + 1) of 10")
-                .font(.headline).foregroundColor(.purple).padding(.vertical, 8).padding(.horizontal, 16)
-                .background(.ultraThinMaterial).cornerRadius(20)
+            HStack(spacing: 8) {
+                Text("Question \(viewModel.currentIndex + 1) of 10")
+                    .font(.headline).foregroundColor(.purple)
+                
+                Text("•").foregroundColor(.white.opacity(0.3))
+                
+                Label(viewModel.selectedCategory.displayName, systemImage: viewModel.selectedCategory.icon)
+                    .font(.caption).bold()
+                    .foregroundColor(viewModel.selectedCategory.color)
+            }
+            .padding(.vertical, 8).padding(.horizontal, 16)
+            .background(.ultraThinMaterial).cornerRadius(20)
             
             Spacer()
             
@@ -117,15 +175,26 @@ struct QuizRushView: View {
             
             Spacer()
             
-            Button {
-                Task {
-                    locationService.fetchLocation()
-                    await viewModel.loadQuestions()
+            VStack(spacing: 12) {
+                Button {
+                    Task {
+                        locationService.fetchLocation()
+                        await viewModel.loadQuestions()
+                    }
+                } label: {
+                    Text("Play Again — \(viewModel.selectedCategory.displayName)").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+                        .foregroundColor(.white).cornerRadius(16)
                 }
-            } label: {
-                Text("Play Again").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
-                    .foregroundColor(.white).cornerRadius(16)
+                
+                Button {
+                    viewModel.backToCategorySelection()
+                } label: {
+                    Text("Choose a Different Genre").font(.subheadline).bold().frame(maxWidth: .infinity).padding(.vertical, 14)
+                        .background(.ultraThinMaterial)
+                        .foregroundColor(.white).cornerRadius(16)
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.15), lineWidth: 1))
+                }
             }.padding(.horizontal, 40).padding(.bottom, 40)
         }
         .onAppear {

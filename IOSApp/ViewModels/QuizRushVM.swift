@@ -10,25 +10,37 @@ import Combine
 
 // MARK: - ViewModel State
 enum ViewState {
-    case loading, loaded, failed
+    case selectingCategory, loading, loaded, failed
 }
 
 @MainActor
 class QuizRushViewModel: ObservableObject {
-    @Published var state: ViewState = .loading
+    @Published var state: ViewState = .selectingCategory
     @Published var questions: [QuizQuestion] = []
     @Published var currentIndex = 0
     @Published var score = 0
     @Published var streak = 0
     @Published var isGameOver = false
+    @Published var selectedCategory: QuizCategory = .any
     
     @Published var answerFeedback: Bool? = nil
     @Published var shakeOffset: CGFloat = 0
     
+    // MARK: - Genre Selection
+    func selectCategory(_ category: QuizCategory) {
+        selectedCategory = category
+        Task { await loadQuestions() }
+    }
+    
+    func backToCategorySelection() {
+        state = .selectingCategory
+    }
+    
     func loadQuestions() async {
         state = .loading
         do {
-            let url = URL(string: "https://opentdb.com/api.php?amount=10&type=multiple&encode=base64")!
+            let urlString = "https://opentdb.com/api.php?amount=10&type=multiple&encode=base64\(selectedCategory.queryParam)"
+            let url = URL(string: urlString)!
             let (data, _) = try await URLSession.shared.data(from: url)
             let decodedResponse = try JSONDecoder().decode(TriviaResponse.self, from: data)
             
