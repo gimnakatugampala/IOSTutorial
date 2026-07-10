@@ -37,7 +37,7 @@ enum GameLevel {
 
     var glowColor: Color {
         switch self {
-        case .l1: return .green; case .l2: return .cyan; case .l3: return .yellow; case .l4: return .orange; case .overdrive: return .red
+        case .l1: return AppTheme.ramp(0); case .l2: return AppTheme.ramp(1); case .l3: return AppTheme.ramp(2); case .l4: return AppTheme.ramp(3); case .overdrive: return AppTheme.ramp(4)
         }
     }
 }

@@ -12,10 +12,10 @@ struct QuizRushView: View {
     
     var body: some View {
         ZStack {
-            Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
+            AppTheme.background.ignoresSafeArea()
             
             if let feedback = viewModel.answerFeedback {
-                (feedback ? Color.green : Color.red).opacity(0.2)
+                (feedback ? AppTheme.success : AppTheme.danger).opacity(0.2)
                     .ignoresSafeArea()
                     .transition(.opacity)
             }
@@ -23,10 +23,10 @@ struct QuizRushView: View {
             VStack {
                 HStack {
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.left.circle.fill").font(.title).foregroundColor(.white.opacity(0.8))
+                        Image(systemName: "chevron.left.circle.fill").font(.title).foregroundColor(AppTheme.textPrimary.opacity(0.8))
                     }
                     Spacer()
-                    Text("QUIZ RUSH").font(.headline).bold().foregroundColor(.purple)
+                    Text("QUIZ RUSH").font(.headline).bold().foregroundColor(AppTheme.quizRush)
                     Spacer()
                     Image(systemName: "circle").opacity(0)
                 }.padding()
@@ -37,20 +37,22 @@ struct QuizRushView: View {
                     
                 case .loading:
                     Spacer()
-                    ProgressView().scaleEffect(2).tint(.purple)
-                    Text("Fetching \(viewModel.selectedCategory.displayName) Trivia...").foregroundColor(.white.opacity(0.7)).padding(.top, 20)
+                    ProgressView().scaleEffect(2).tint(AppTheme.quizRush)
+                    Text("Fetching \(viewModel.selectedCategory.displayName) Trivia...").foregroundColor(AppTheme.textSecondary).padding(.top, 20)
                     Spacer()
                     
                 case .failed:
                     Spacer()
-                    Image(systemName: "wifi.exclamationmark").font(.system(size: 60)).foregroundColor(.red)
-                    Text("Network Error").font(.title2).bold().foregroundColor(.white).padding(.top)
-                    Text("Could not reach Open Trivia DB, or this genre is out of questions.").multilineTextAlignment(.center).foregroundColor(.gray).padding(.horizontal, 40)
+                    Image(systemName: "wifi.exclamationmark").font(.system(size: 60)).foregroundColor(AppTheme.danger)
+                    Text("Network Error").font(.title2).bold().foregroundColor(AppTheme.textPrimary).padding(.top)
+                    Text("Could not reach Open Trivia DB, or this genre is out of questions.").multilineTextAlignment(.center).foregroundColor(AppTheme.textSecondary).padding(.horizontal, 40)
                     Button { Task { await viewModel.loadQuestions() } } label: {
-                        Text("Retry").bold().padding().frame(maxWidth: 200).background(Color.purple).foregroundColor(.white).cornerRadius(12)
-                    }.padding(.top, 20)
+                        Text("Retry").bold().padding().frame(maxWidth: 200).background(AppTheme.quizRush).foregroundColor(.white).cornerRadius(AppTheme.radiusButton)
+                    }
+                    .buttonStyle(PressableStyle())
+                    .padding(.top, 20)
                     Button { viewModel.backToCategorySelection() } label: {
-                        Text("Choose a Different Genre").foregroundColor(.gray)
+                        Text("Choose a Different Genre").foregroundColor(AppTheme.textSecondary)
                     }.padding(.top, 4)
                     Spacer()
                     
@@ -58,6 +60,7 @@ struct QuizRushView: View {
                     if viewModel.isGameOver { gameOverView } else { gamePlayView }
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: viewModel.state)
         }
         .navigationBarBackButtonHidden(true)
         .task {
@@ -72,10 +75,10 @@ struct QuizRushView: View {
                 VStack(spacing: 6) {
                     Text("Choose a Genre")
                         .font(.system(size: 30, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.textPrimary)
                     Text("Questions are pulled live from Open Trivia DB")
                         .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppTheme.textMuted)
                 }
                 .padding(.top, 10)
 
@@ -86,22 +89,35 @@ struct QuizRushView: View {
                             generator.impactOccurred()
                             viewModel.selectCategory(category)
                         } label: {
-                            VStack(spacing: 10) {
-                                Image(systemName: category.icon)
-                                    .font(.system(size: 26))
-                                Text(category.displayName)
-                                    .font(.subheadline).bold()
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.8)
+                            ZStack(alignment: .topTrailing) {
+                                VStack(spacing: 10) {
+                                    Image(systemName: category.icon)
+                                        .font(.system(size: 26))
+                                    Text(category.displayName)
+                                        .font(.subheadline).bold()
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                        .minimumScaleFactor(0.8)
+                                }
+                                .foregroundColor(AppTheme.textPrimary)
+                                .frame(maxWidth: .infinity, minHeight: 100)
+                                .padding(.horizontal, 8)
+                                .background(category.color.opacity(0.22))
+                                .cornerRadius(AppTheme.radiusCard)
+                                .overlay(RoundedRectangle(cornerRadius: AppTheme.radiusCard).stroke(category.color.opacity(0.7), lineWidth: 1.5))
+                                
+                                if category == .any {
+                                    Text("PICK FOR ME")
+                                        .font(.system(size: 9, weight: .black))
+                                        .padding(.horizontal, 8).padding(.vertical, 4)
+                                        .background(category.color)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(8)
+                                        .padding(8)
+                                }
                             }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, minHeight: 100)
-                            .padding(.horizontal, 8)
-                            .background(category.color.opacity(0.22))
-                            .cornerRadius(18)
-                            .overlay(RoundedRectangle(cornerRadius: 18).stroke(category.color.opacity(0.7), lineWidth: 1.5))
                         }
+                        .buttonStyle(PressableStyle())
                     }
                 }
                 .padding(.horizontal)
@@ -114,36 +130,36 @@ struct QuizRushView: View {
         VStack(spacing: 25) {
             HStack {
                 VStack(alignment: .leading) {
-                    Text("SCORE").font(.caption).foregroundColor(.gray)
-                    Text("\(viewModel.score)").font(.title2).bold().foregroundColor(.white)
+                    Text("SCORE").font(.caption).foregroundColor(AppTheme.textMuted)
+                    Text("\(viewModel.score)").font(.title2).bold().foregroundColor(AppTheme.textPrimary)
                 }
                 Spacer()
                 VStack(alignment: .trailing) {
-                    Text("STREAK").font(.caption).foregroundColor(.orange)
-                    Text("\(viewModel.streak) 🔥").font(.title2).bold().foregroundColor(.orange)
+                    Text("STREAK").font(.caption).foregroundColor(AppTheme.warning)
+                    Text("\(viewModel.streak) 🔥").font(.title2).bold().foregroundColor(AppTheme.warning)
                 }
             }.padding(.horizontal)
             
             HStack(spacing: 8) {
                 Text("Question \(viewModel.currentIndex + 1) of 10")
-                    .font(.headline).foregroundColor(.purple)
+                    .font(.headline).foregroundColor(AppTheme.quizRush)
                 
-                Text("•").foregroundColor(.white.opacity(0.3))
+                Text("•").foregroundColor(AppTheme.textMuted)
                 
                 Label(viewModel.selectedCategory.displayName, systemImage: viewModel.selectedCategory.icon)
                     .font(.caption).bold()
                     .foregroundColor(viewModel.selectedCategory.color)
             }
             .padding(.vertical, 8).padding(.horizontal, 16)
-            .background(.ultraThinMaterial).cornerRadius(20)
+            .background(.ultraThinMaterial).cornerRadius(AppTheme.radiusPill)
             
             Spacer()
             
             Text(viewModel.questions[viewModel.currentIndex].text)
-                .font(.title2).bold().multilineTextAlignment(.center).foregroundColor(.white)
+                .font(.title2).bold().multilineTextAlignment(.center).foregroundColor(AppTheme.textPrimary)
                 .padding().frame(maxWidth: .infinity, minHeight: 150)
-                .background(Color.white.opacity(0.05)).cornerRadius(20)
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.1), lineWidth: 1))
+                .background(AppTheme.card).cornerRadius(AppTheme.radiusPill)
+                .overlay(RoundedRectangle(cornerRadius: AppTheme.radiusPill).stroke(AppTheme.cardBorder, lineWidth: 1))
                 .padding(.horizontal)
                 .offset(x: viewModel.shakeOffset)
             
@@ -153,8 +169,9 @@ struct QuizRushView: View {
                 ForEach(viewModel.questions[viewModel.currentIndex].answers, id: \.self) { answer in
                     Button { viewModel.checkAnswer(answer) } label: {
                         Text(answer).font(.headline).frame(maxWidth: .infinity).padding()
-                            .background(buttonColor(for: answer)).foregroundColor(.white).cornerRadius(15)
+                            .background(buttonColor(for: answer)).foregroundColor(.white).cornerRadius(AppTheme.radiusButton - 1)
                     }
+                    .buttonStyle(PressableStyle())
                     .disabled(viewModel.answerFeedback != nil)
                 }
             }.padding(.horizontal).padding(.bottom, 30)
@@ -164,14 +181,19 @@ struct QuizRushView: View {
     var gameOverView: some View {
         VStack(spacing: 20) {
             Spacer()
-            Text("QUIZ COMPLETE!").font(.system(size: 32, weight: .black, design: .rounded)).foregroundColor(.purple)
+            
+            Image(systemName: "trophy.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(LinearGradient(colors: [AppTheme.warning, AppTheme.tapFrenzy.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+            
+            Text("QUIZ COMPLETE!").font(.system(size: 32, weight: .black, design: .rounded)).foregroundColor(AppTheme.quizRush)
             
             if viewModel.score > highScore {
-                Text("🏆 New High Score!").foregroundColor(.yellow)
+                Text("🏆 New High Score!").foregroundColor(AppTheme.warning)
             }
             
-            Text("Final Score").foregroundColor(.gray)
-            Text("\(viewModel.score)").font(.system(size: 60, weight: .black, design: .rounded)).foregroundColor(.white)
+            Text("Final Score").foregroundColor(AppTheme.textSecondary)
+            Text("\(viewModel.score)").font(.system(size: 60, weight: .black, design: .rounded)).foregroundColor(AppTheme.textPrimary)
             
             Spacer()
             
@@ -183,18 +205,20 @@ struct QuizRushView: View {
                     }
                 } label: {
                     Text("Play Again — \(viewModel.selectedCategory.displayName)").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
-                        .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
-                        .foregroundColor(.white).cornerRadius(16)
+                        .background(LinearGradient(colors: [AppTheme.quizRush, AppTheme.quizRush.opacity(0.6)], startPoint: .leading, endPoint: .trailing))
+                        .foregroundColor(.white).cornerRadius(AppTheme.radiusButton)
                 }
+                .buttonStyle(PressableStyle())
                 
                 Button {
                     viewModel.backToCategorySelection()
                 } label: {
                     Text("Choose a Different Genre").font(.subheadline).bold().frame(maxWidth: .infinity).padding(.vertical, 14)
                         .background(.ultraThinMaterial)
-                        .foregroundColor(.white).cornerRadius(16)
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.15), lineWidth: 1))
+                        .foregroundColor(AppTheme.textPrimary).cornerRadius(AppTheme.radiusButton)
+                        .overlay(RoundedRectangle(cornerRadius: AppTheme.radiusButton).stroke(AppTheme.cardBorderStrong, lineWidth: 1))
                 }
+                .buttonStyle(PressableStyle())
             }.padding(.horizontal, 40).padding(.bottom, 40)
         }
         .onAppear {
@@ -211,9 +235,9 @@ struct QuizRushView: View {
     }
     
     func buttonColor(for answer: String) -> Color {
-        guard let feedback = viewModel.answerFeedback else { return Color.white.opacity(0.1) }
+        guard let feedback = viewModel.answerFeedback else { return AppTheme.card }
         let isCorrectAnswer = answer == viewModel.questions[viewModel.currentIndex].correctAnswer
-        if isCorrectAnswer { return .green } else if !feedback { return .red.opacity(0.6) }
-        return Color.white.opacity(0.1)
+        if isCorrectAnswer { return AppTheme.success } else if !feedback { return AppTheme.danger.opacity(0.6) }
+        return AppTheme.card
     }
 }

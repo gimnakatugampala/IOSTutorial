@@ -5,7 +5,6 @@
 //  Created by Gimna Katugampala on 2026-07-10.
 //
 
-
 import SwiftUI
 
 // MARK: - Open Trivia DB Categories
@@ -66,23 +65,12 @@ enum QuizCategory: Int, CaseIterable, Identifiable {
         }
     }
 
+    /// Pulled from AppTheme.genrePalette by position, not hand-picked per case —
+    /// keeps every color in the app coming from one shared source.
     var color: Color {
-        switch self {
-        case .any: return .purple
-        case .generalKnowledge: return .indigo
-        case .books: return .brown
-        case .film: return .pink
-        case .music: return .orange
-        case .television: return .cyan
-        case .videoGames: return .green
-        case .scienceNature: return .mint
-        case .computers: return .blue
-        case .mythology: return .red
-        case .sports: return .yellow
-        case .geography: return .teal
-        case .history: return .gray
-        case .animals: return .orange
-        }
+        if self == .any { return AppTheme.brand }
+        let index = QuizCategory.allCases.firstIndex(of: self) ?? 0
+        return AppTheme.genreColor(at: index)
     }
 
     /// Query param appended to the OpenTDB URL, empty for "Any Genre".

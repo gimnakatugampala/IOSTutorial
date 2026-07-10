@@ -9,7 +9,7 @@ import Combine
 
 
 // MARK: - ViewModel State
-enum ViewState {
+enum ViewState: Equatable {
     case selectingCategory, loading, loaded, failed
 }
 

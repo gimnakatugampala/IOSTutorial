@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-
 struct GameMenuButton: View {
     let title: String
     let icon: String

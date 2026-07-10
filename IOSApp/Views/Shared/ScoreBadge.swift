@@ -10,18 +10,29 @@ import SwiftUI
 struct ScoreBadge: View {
     let title: String
     let score: Int
+    var color: Color = AppTheme.brand
+
     var body: some View {
-        VStack {
-            Text(title).font(.caption2).foregroundColor(.white.opacity(0.6))
-            Text("\(score)").font(.headline).bold().foregroundColor(.white)
+        VStack(spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(AppTheme.textSecondary)
+
+            Text("\(score)")
+                .font(.headline).bold()
+                .foregroundColor(score > 0 ? color : AppTheme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
         .background(.ultraThinMaterial.opacity(0.5))
-        .cornerRadius(12)
+        .cornerRadius(AppTheme.radiusButton - 4)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radiusButton - 4)
+                .stroke(color.opacity(score > 0 ? 0.5 : 0.15), lineWidth: 1)
+        )
     }
 }
 
 #Preview {
-    ScoreBadge(title: "HIGH SCORE", score: 42)
+    ScoreBadge(title: "HIGH SCORE", score: 42, color: AppTheme.tapFrenzy)
 }

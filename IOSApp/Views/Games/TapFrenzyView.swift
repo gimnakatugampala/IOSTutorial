@@ -31,7 +31,7 @@ struct TapFrenzyView: View {
             ZStack {
                 // Background
                 LinearGradient(
-                    colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color.purple.opacity(0.3)],
+                    colors: [AppTheme.background, AppTheme.tapFrenzy.opacity(0.3)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -148,9 +148,9 @@ struct TapFrenzyView: View {
     
     func color(for diff: GameDifficulty) -> Color {
         switch diff {
-        case .easy: return .green
-        case .medium: return .orange
-        case .hard: return .red
+        case .easy: return AppTheme.success
+        case .medium: return AppTheme.warning
+        case .hard: return AppTheme.danger
         }
     }
 
