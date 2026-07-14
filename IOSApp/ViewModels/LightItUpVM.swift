@@ -80,6 +80,16 @@ class LightItUpVM: ObservableObject {
     /// 30s or 90s round still ramps through all 5 stages sensibly.
     private var totalRoundLength: Int = 60
 
+    /// Lives are capped here so leveling up can never push the HUD (which only
+    /// draws 3 heart icons) past what it can display.
+    private let maxLives = 3
+
+    /// Set true the moment any lit card in the current window is tapped
+    /// correctly. Used so a life is only lost when a window is a total whiff —
+    /// tapping even one of several simultaneously-lit tiles now protects the
+    /// whole window, instead of the untouched extras still costing a life.
+    private var hitSomethingThisWindow = false
+
     // Private Timers
     private var litTimer: AnyCancellable?
     private var roundTimer: AnyCancellable?
@@ -93,6 +103,7 @@ class LightItUpVM: ObservableObject {
         wrongTaps = 0
         missedCards = 0
         lastTapWasGolden = false
+        hitSomethingThisWindow = false
 
         totalRoundLength = max(roundLength, 10)
         timeRemaining = totalRoundLength
@@ -119,12 +130,16 @@ class LightItUpVM: ObservableObject {
             bestStreak = max(bestStreak, streak)
             correctTaps += 1
             lastTapWasGolden = golden
+            hitSomethingThisWindow = true
 
             cards[card.id].isLit = false
             cards[card.id].isGolden = false
         } else {
+            // Tapping a dark tile no longer costs a life on its own — it's only
+            // tracked for the accuracy stat. Life loss is decided once per
+            // window (see lightUpCards) based on whether the lit tile(s) were
+            // ever tapped, so a single window can only ever cost at most 1 life.
             wrongTaps += 1
-            registerMiss(livesLost: 1, missedCount: 1)
         }
     }
 
@@ -177,15 +192,15 @@ class LightItUpVM: ObservableObject {
     private func lightUpCards() {
         guard !gameOver else { return }
         
-        // Penalize for missed cards. At L4/overdrive, several cards are lit at
-        // once — if the player only manages to tap one of them in time, the
-        // others left lit still count as "missed", but only ONE life is taken
-        // per tick regardless of how many were left over. This keeps a correct
-        // tap from being drowned out by losing 2-3 lives in the same instant.
+        // Penalize only on a total whiff. At L4/overdrive several cards are lit
+        // at once — as long as the player tapped at least ONE of them correctly
+        // this window, no life is lost, even if the others expired untapped.
+        // Missed cards are still logged for the accuracy/grade stat either way.
         let missed = cards.filter { $0.isLit }.count
         if missed > 0 {
-            registerMiss(livesLost: 1, missedCount: missed)
+            registerMiss(livesLost: hitSomethingThisWindow ? 0 : 1, missedCount: missed)
         }
+        hitSomethingThisWindow = false
         
         guard !gameOver else { return }
         
@@ -208,6 +223,7 @@ class LightItUpVM: ObservableObject {
 
     private func registerMiss(livesLost: Int, missedCount: Int) {
         missedCards += missedCount
+        guard livesLost > 0 else { return }
         streak = 0
         lives -= livesLost
         if lives <= 0 { endGame() }
@@ -237,6 +253,12 @@ class LightItUpVM: ObservableObject {
         if newLevel != level {
             level = newLevel
             showLevelFlash = true
+
+            // Reward surviving to the next level with a bonus life (never above
+            // the starting max of 3, so the 3-heart HUD always has room to show it).
+            if lives < maxLives {
+                lives += 1
+            }
             
             // Turn off the flash after long enough for the player to actually read it
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { [weak self] in
