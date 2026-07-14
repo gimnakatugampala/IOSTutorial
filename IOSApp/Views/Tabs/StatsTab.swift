@@ -18,7 +18,10 @@ struct StatsTab: View {
     /// Tapping a mode card filters the session list below it. Tapping the
     /// same one again (or "Clear") resets to showing everything.
     @State private var selectedMode: GameMode? = nil
-
+    @State private var selectedDateRange: StatsDateRange = .allTime
+    @State private var selectedMetric: StatsMetric = .highScore
+    
+    
     private var totalGamesPlayed: Int { statsVM.sessions.count }
     private var totalScore: Int { statsVM.sessions.reduce(0) { $0 + $1.score } }
 
@@ -26,7 +29,14 @@ struct StatsTab: View {
         guard let mode = selectedMode else { return statsVM.sessions }
         return statsVM.sessions.filter { $0.mode == mode }
     }
-
+    
+    /// Sessions within the currently selected date range — feeds only the chart,
+    /// so the overview cards and full session list above/below still show everything.
+    private var chartSessions: [GameSession] {
+        statsVM.sessions.filter { selectedDateRange.contains($0.timestamp) }
+    }
+    
+    
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -136,52 +146,124 @@ struct StatsTab: View {
         }
         .buttonStyle(PressableStyle())
     }
+    
+    private func metricValue(for mode: GameMode) -> Int {
+        let modeSessions = chartSessions.filter { $0.mode == mode }
+        guard !modeSessions.isEmpty else { return 0 }
 
+        switch selectedMetric {
+        case .highScore:
+            return modeSessions.map { $0.score }.max() ?? 0
+        case .gamesPlayed:
+            return modeSessions.count
+        case .averageScore:
+            return modeSessions.reduce(0) { $0 + $1.score } / modeSessions.count
+        case .totalScore:
+            return modeSessions.reduce(0) { $0 + $1.score }
+        }
+    }
     // MARK: - Chart
 
     var highScoreChartSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("High Scores by Mode")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(AppTheme.textPrimary)
-                .padding(.horizontal)
+            HStack {
+                Text("\(selectedMetric.rawValue) by Mode")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(AppTheme.textPrimary)
 
-            Chart {
-                ForEach(GameMode.allCases, id: \.self) { mode in
-                    BarMark(
-                        x: .value("Score", statsVM.highestScore(for: mode)),
-                        y: .value("Mode", mode.shortLabel)
-                    )
-                    .foregroundStyle(mode.themeColor.gradient)
-                    .cornerRadius(8)
-                    .annotation(position: .trailing) {
-                        Text("\(statsVM.highestScore(for: mode))")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(AppTheme.textPrimary)
+                Spacer()
+
+                Menu {
+                    ForEach(StatsMetric.allCases) { metric in
+                        Button {
+                            withAnimation(.spring(response: 0.3)) { selectedMetric = metric }
+                        } label: {
+                            Label(metric.rawValue, systemImage: metric.icon)
+                        }
                     }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: selectedMetric.icon)
+                        Text(selectedMetric.rawValue)
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.brand)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.brand.opacity(0.12))
+                    .clipShape(Capsule())
                 }
             }
-            .chartXAxis {
-                AxisMarks { _ in
-                    AxisGridLine().foregroundStyle(AppTheme.cardBorder)
-                    AxisValueLabel().foregroundStyle(AppTheme.textMuted)
-                }
-            }
-            .chartYAxis {
-                AxisMarks { _ in
-                    AxisValueLabel().foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-            .frame(height: 180)
-            .padding()
-            .background(.ultraThinMaterial.opacity(0.5))
-            .cornerRadius(AppTheme.radiusCard)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.radiusCard)
-                    .stroke(AppTheme.cardBorder, lineWidth: 1)
+            .padding(.horizontal)
+
+            // Date range filter
+            SegmentedFilterBar(
+                options: StatsDateRange.allCases,
+                selection: $selectedDateRange,
+                label: { $0.rawValue },
+                tint: AppTheme.brand
             )
             .padding(.horizontal)
+
+            if chartSessions.isEmpty {
+                emptyChartState
+            } else {
+                Chart {
+                    ForEach(GameMode.allCases, id: \.self) { mode in
+                        BarMark(
+                            x: .value(selectedMetric.rawValue, metricValue(for: mode)),
+                            y: .value("Mode", mode.shortLabel)
+                        )
+                        .foregroundStyle(mode.themeColor.gradient)
+                        .cornerRadius(8)
+                        .annotation(position: .trailing) {
+                            Text("\(metricValue(for: mode))")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(AppTheme.textPrimary)
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks { _ in
+                        AxisGridLine().foregroundStyle(AppTheme.cardBorder)
+                        AxisValueLabel().foregroundStyle(AppTheme.textMuted)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { _ in
+                        AxisValueLabel().foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+                .frame(height: 180)
+                .padding()
+                .background(.ultraThinMaterial.opacity(0.5))
+                .cornerRadius(AppTheme.radiusCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusCard)
+                        .stroke(AppTheme.cardBorder, lineWidth: 1)
+                )
+                .padding(.horizontal)
+                .animation(.easeInOut(duration: 0.25), value: selectedMetric)
+                .animation(.easeInOut(duration: 0.25), value: selectedDateRange)
+            }
         }
+    }
+
+    var emptyChartState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 32))
+                .foregroundColor(AppTheme.textMuted)
+            Text("No sessions in this range")
+                .font(.subheadline)
+                .foregroundColor(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .background(.ultraThinMaterial.opacity(0.3))
+        .cornerRadius(AppTheme.radiusCard)
+        .padding(.horizontal)
     }
 
     // MARK: - Recent Sessions
@@ -330,6 +412,47 @@ private extension GameMode {
     }
 }
 
+// FIlter by date
+enum StatsDateRange: String, CaseIterable, Identifiable {
+    case today = "Today"
+    case week = "7 Days"
+    case month = "30 Days"
+    case allTime = "All Time"
+
+    var id: String { rawValue }
+
+    func contains(_ date: Date, calendar: Calendar = .current) -> Bool {
+        switch self {
+        case .today:
+            return calendar.isDateInToday(date)
+        case .week:
+            let cutoff = calendar.date(byAdding: .day, value: -7, to: Date()) ?? .distantPast
+            return date >= cutoff
+        case .month:
+            let cutoff = calendar.date(byAdding: .day, value: -30, to: Date()) ?? .distantPast
+            return date >= cutoff
+        case .allTime:
+            return true
+        }
+    }
+}
+
+enum StatsMetric: String, CaseIterable, Identifiable {
+    case highScore = "High Score"
+    case gamesPlayed = "Games Played"
+    case averageScore = "Avg Score"
+    case totalScore = "Total Score"
+
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .highScore: return "trophy.fill"
+        case .gamesPlayed: return "number"
+        case .averageScore: return "chart.bar.fill"
+        case .totalScore: return "sum"
+        }
+    }
+}
 #Preview {
     NavigationStack {
         StatsTab()
