@@ -88,6 +88,31 @@ enum AppTheme {
     static let radiusCard: CGFloat = 18
     static let radiusPill: CGFloat = 20
     static let radiusButton: CGFloat = 16
+    
+    
+    
+    
+    // MARK: - Gradients
+        /// Universal brand gradient for main CTA buttons and hero text
+        static let brandGradient = LinearGradient(
+            colors: [AppTheme.brand, Color(red: 0.6, green: 0.3, blue: 0.9)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        
+        /// Explosive pink/red gradient for Tap Frenzy UI
+        static let tapFrenzyGradient = LinearGradient(
+            colors: [AppTheme.tapFrenzy, Color(red: 1.0, green: 0.4, blue: 0.6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        
+        /// Neon cyan/blue gradient for Light It Up UI
+        static let lightItUpGradient = LinearGradient(
+            colors: [AppTheme.lightItUp, Color(red: 0.4, green: 0.9, blue: 1.0)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
 }
 
 // MARK: - Shared button style
@@ -101,3 +126,4 @@ struct PressableStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
+

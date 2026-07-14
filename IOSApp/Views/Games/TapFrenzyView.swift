@@ -10,14 +10,12 @@ struct TapFrenzyView: View {
     @State private var buttonPosition = CGPoint(x: 200, y: 400)
     @State private var buttonSize: CGFloat = 200
     
-    // 🚨 1. Separate High Scores for each difficulty!
     @AppStorage("tapFrenzyHighScore_easy") private var highScoreEasy = 0
     @AppStorage("tapFrenzyHighScore_medium") private var highScoreMedium = 0
     @AppStorage("tapFrenzyHighScore_hard") private var highScoreHard = 0
     
     @Environment(\.dismiss) private var dismiss
 
-    // Dynamically get the right high score to show
     var currentHighScore: Int {
         switch vm.difficulty {
         case .easy: return highScoreEasy
@@ -31,24 +29,33 @@ struct TapFrenzyView: View {
             ZStack {
                 // Background
                 LinearGradient(
-                    colors: [AppTheme.background, AppTheme.tapFrenzy.opacity(0.3)],
+                    colors: [AppTheme.background, Color.purple.opacity(0.3)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
-                // 🚨 2. Detect missed taps on the background!
                 .onTapGesture {
                     vm.backgroundTapped()
                 }
 
+                // 🚨 THE FIX: Clean View Routing
                 if !vm.hasStarted {
-                    // Pre-game Difficulty Menu
+                    // 1. Show Difficulty Menu
                     difficultySelectionMenu(in: geometry)
+                    
+                } else if vm.isGameOver {
+                    // 2. Show Game Over Menu (HUD is hidden!)
+                    gameOverMenu(in: geometry)
+                    
                 } else {
-                    // The Game
+                    // 3. Show the Game & HUD
                     VStack {
                         HStack(spacing: 15) {
-                            Button { dismiss() } label: { Image(systemName: "chevron.left.circle.fill").font(.system(size: 40)).foregroundStyle(.white.opacity(0.8), .ultraThinMaterial) }
+                            Button { dismiss() } label: {
+                                Image(systemName: "chevron.left.circle.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(.white.opacity(0.8), .ultraThinMaterial)
+                            }
                             statCard(icon: "trophy.fill", title: "SCORE", value: "\(vm.score)", color: .orange)
                             statCard(icon: "timer", title: "TIME", value: "\(vm.timeRemaining)", color: .cyan)
                         }
@@ -57,44 +64,36 @@ struct TapFrenzyView: View {
                     }
                     .padding(.top)
 
-                    if !vm.isGameOver {
-                        Button {
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                            generator.impactOccurred()
-                            vm.targetTapped()
-                            
-                            withAnimation(.spring()) {
-                                if buttonSize > 50 { buttonSize -= 10 }
-                            }
-                        } label: {
-                            Circle()
-                                .fill(RadialGradient(gradient: Gradient(colors: [.pink, .red.opacity(0.8)]), center: .topLeading, startRadius: 10, endRadius: buttonSize))
-                                
-                                // The Border
-                                .overlay(
-                                    Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.6), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 4)
-                                )
-                                
-                                // Static Font Size + GPU Scale Effect
-                                .overlay(
-                                    Text("TAP")
-                                        .font(.system(size: 50, weight: .black, design: .rounded)) // Static size!
-                                        .foregroundColor(.white)
-                                        .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
-                                        .scaleEffect(buttonSize / 200) // GPU scaling based on the original 200 max size
-                                        .fixedSize() // Locks the layout frame
-                                )
-                                .frame(width: buttonSize, height: buttonSize)
-                                .shadow(color: .red.opacity(0.6), radius: 20, y: 10)
+                    // The Bouncing Target Button
+                    Button {
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
+                        vm.targetTapped()
+                        
+                        withAnimation(.spring()) {
+                            if buttonSize > 50 { buttonSize -= 10 }
                         }
-                        .position(buttonPosition)
-                    } else {
-                        gameOverMenu(in: geometry)
+                    } label: {
+                        Circle()
+                            .fill(RadialGradient(gradient: Gradient(colors: [.pink, .red.opacity(0.8)]), center: .topLeading, startRadius: 10, endRadius: buttonSize))
+                            .overlay(
+                                Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.6), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 4)
+                            )
+                            .overlay(
+                                Text("TAP")
+                                    .font(.system(size: 50, weight: .black, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
+                                    .scaleEffect(buttonSize / 200)
+                                    .fixedSize()
+                            )
+                            .frame(width: buttonSize, height: buttonSize)
+                            .shadow(color: .red.opacity(0.6), radius: 20, y: 10)
                     }
+                    .position(buttonPosition)
                 }
             }
             .navigationBarBackButtonHidden(true)
-            // 🚨 3. The View just listens to the VM to know when to jump!
             .onChange(of: vm.moveTrigger) { _ in
                 let x = CGFloat.random(in: 60...(geometry.size.width - 60))
                 let y = CGFloat.random(in: 180...(geometry.size.height - 150))
@@ -121,7 +120,6 @@ struct TapFrenzyView: View {
             
             ForEach(GameDifficulty.allCases) { diff in
                 Button {
-                    // Start GPS fetch early!
                     locationService.fetchLocation()
                     buttonPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
                     vm.selectDifficulty(diff)
@@ -148,9 +146,9 @@ struct TapFrenzyView: View {
     
     func color(for diff: GameDifficulty) -> Color {
         switch diff {
-        case .easy: return AppTheme.success
-        case .medium: return AppTheme.warning
-        case .hard: return AppTheme.danger
+        case .easy: return .green
+        case .medium: return .orange
+        case .hard: return .red
         }
     }
 
@@ -172,11 +170,17 @@ struct TapFrenzyView: View {
     @ViewBuilder
     func gameOverMenu(in geometry: GeometryProxy) -> some View {
         VStack(spacing: 25) {
-            Image(systemName: "trophy.fill").font(.system(size: 70)).foregroundStyle(LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom)).shadow(color: .orange.opacity(0.5), radius: 10)
-            Text("GAME OVER").font(.system(size: 32, weight: .black, design: .rounded)).foregroundColor(.white)
+            Image(systemName: "trophy.fill")
+                .font(.system(size: 70))
+                .foregroundStyle(LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom))
+                .shadow(color: .orange.opacity(0.5), radius: 10)
             
-            // Show difficulty played
-            Text("Difficulty: \(vm.difficulty.rawValue)").foregroundColor(.white.opacity(0.8))
+            Text("GAME OVER")
+                .font(.system(size: 32, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            
+            Text("Difficulty: \(vm.difficulty.rawValue)")
+                .foregroundColor(.white.opacity(0.8))
 
             VStack(spacing: 5) {
                 Text("Final Score").font(.subheadline).foregroundColor(.white.opacity(0.7))
@@ -191,11 +195,18 @@ struct TapFrenzyView: View {
                 Button {
                     vm.hasStarted = false // Go back to difficulty menu
                 } label: {
-                    Text("Play Again").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16).background(LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing)).foregroundColor(.white).cornerRadius(16)
+                    Text("Play Again")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing))
+                        .foregroundColor(.white).cornerRadius(16)
                 }
                 
                 Button { dismiss() } label: {
-                    Text("Main Menu").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16).background(.ultraThinMaterial).foregroundColor(.white).cornerRadius(16).overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.2), lineWidth: 1))
+                    Text("Main Menu")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(.ultraThinMaterial)
+                        .foregroundColor(.white).cornerRadius(16)
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.2), lineWidth: 1))
                 }
             }
         }
