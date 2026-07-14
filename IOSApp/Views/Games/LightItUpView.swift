@@ -297,14 +297,13 @@ struct LightItUpView: View {
         )
         .padding(.horizontal, 30)
         .onAppear {
-            // 🚨 SAVE TO STATS AND MAP WHEN GAME ENDS
             saveHighScores()
-            
             statsVM.saveNewSession(
                 mode: .lightItUp,
                 score: vm.score,
                 lat: locationService.latitude,
-                lon: locationService.longitude
+                lon: locationService.longitude,
+                levelReached: vm.level.label
             )
         }
     }

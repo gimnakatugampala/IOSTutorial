@@ -33,16 +33,31 @@ class StatsVM: ObservableObject {
     }
     
     // Call this function whenever a game finishes
-    func saveNewSession(mode: GameMode, score: Int, lat: Double, lon: Double) {
+    func saveNewSession(
+        mode: GameMode,
+        score: Int,
+        lat: Double,
+        lon: Double,
+        difficulty: String? = nil,
+        levelReached: String? = nil,
+        correctAnswers: Int? = nil,
+        incorrectAnswers: Int? = nil,
+        genre: String? = nil
+    ) {
         let newSession = GameSession(
             mode: mode,
             score: score,
             timestamp: Date(),
             latitude: lat,
-            longitude: lon
+            longitude: lon,
+            difficulty: difficulty,
+            levelReached: levelReached,
+            correctAnswers: correctAnswers,
+            incorrectAnswers: incorrectAnswers,
+            genre: genre
         )
-        
-        sessions.insert(newSession, at: 0) // Add to the top of the list
+
+        sessions.insert(newSession, at: 0)
         persistData()
     }
     

@@ -271,7 +271,8 @@ struct TapFrenzyView: View {
                 mode: .tapFrenzy,
                 score: vm.score,
                 lat: locationService.latitude,
-                lon: locationService.longitude
+                lon: locationService.longitude,
+                difficulty: vm.difficulty.rawValue
             )
         }
     }

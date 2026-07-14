@@ -250,6 +250,12 @@ struct StatsTab: View {
                 Text(session.timestamp.formatted(date: .abbreviated, time: .shortened))
                     .font(.system(size: 11))
                     .foregroundColor(AppTheme.textMuted)
+                
+                if let detail = session.detailText {
+                    Text(detail)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(color.opacity(0.85))
+                }
             }
 
             Spacer()

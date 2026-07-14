@@ -20,6 +20,8 @@ class QuizRushViewModel: ObservableObject {
     @Published var currentIndex = 0
     @Published var score = 0
     @Published var streak = 0
+    @Published var correctCount = 0
+    @Published var incorrectCount = 0
     @Published var isGameOver = false
     @Published var selectedCategory: QuizCategory = .any
     
@@ -62,6 +64,8 @@ class QuizRushViewModel: ObservableObject {
         currentIndex = 0
         score = 0
         streak = 0
+        correctCount = 0
+        incorrectCount = 0
         isGameOver = false
         answerFeedback = nil
     }
@@ -73,11 +77,13 @@ class QuizRushViewModel: ObservableObject {
         if isCorrect {
             score += 10 + (streak * 5)
             streak += 1
+            correctCount += 1
             answerFeedback = true
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } else {
             score = max(0, score - 5)
             streak = 0
+            incorrectCount += 1     
             answerFeedback = false
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             

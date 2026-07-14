@@ -222,14 +222,16 @@ struct QuizRushView: View {
             }.padding(.horizontal, 40).padding(.bottom, 40)
         }
         .onAppear {
-            // 🚨 3. Save Data When Game Over Appears
             if viewModel.score > highScore { highScore = viewModel.score }
-            
+
             statsVM.saveNewSession(
                 mode: .quizRush,
                 score: viewModel.score,
                 lat: locationService.latitude,
-                lon: locationService.longitude
+                lon: locationService.longitude,
+                correctAnswers: viewModel.correctCount,
+                incorrectAnswers: viewModel.incorrectCount,
+                genre: viewModel.selectedCategory.displayName
             )
         }
     }
