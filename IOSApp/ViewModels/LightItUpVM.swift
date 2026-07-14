@@ -25,7 +25,7 @@ enum GameLevel {
 
     var litWindow: Double {
         switch self {
-        case .l1: return 1.5; case .l2: return 1.2; case .l3: return 0.9; case .l4: return 0.65; case .overdrive: return 0.4
+        case .l1: return 1.5; case .l2: return 1.2; case .l3: return 1.0; case .l4: return 0.8; case .overdrive: return 0.4
         }
     }
 
@@ -38,6 +38,12 @@ enum GameLevel {
     var glowColor: Color {
         switch self {
         case .l1: return AppTheme.ramp(0); case .l2: return AppTheme.ramp(1); case .l3: return AppTheme.ramp(2); case .l4: return AppTheme.ramp(3); case .overdrive: return AppTheme.ramp(4)
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .l1: return "1"; case .l2: return "2"; case .l3: return "3"; case .l4: return "4"; case .overdrive: return "MAX"
         }
     }
 }
@@ -53,14 +59,43 @@ class LightItUpVM: ObservableObject {
     @Published var showLevelFlash = false
     @Published var pulseBackground = false
 
+    // MARK: - Combo / Bonus State (creative additions beyond the base spec)
+    @Published var streak = 0
+    @Published private(set) var bestStreak = 0
+    @Published var lastTapWasGolden = false
+
+    // Accuracy bookkeeping, used to compute the end-of-round performance grade
+    private var correctTaps = 0
+    private var wrongTaps = 0
+    private var missedCards = 0
+
+    /// Chance any given lit card is rolled as a bonus "golden" card (worth 3x).
+    private let goldenChance: Double = 0.15
+    private let goldenBonusPoints = 3
+    /// Every N-streak taps adds +1 bonus point on top of the base value.
+    private let streakBonusEvery = 3
+
+    /// The full length of the current round, set by the caller (defaults to 60s to
+    /// match the base spec). Level boundaries scale proportionally to this so a
+    /// 30s or 90s round still ramps through all 5 stages sensibly.
+    private var totalRoundLength: Int = 60
+
     // Private Timers
     private var litTimer: AnyCancellable?
     private var roundTimer: AnyCancellable?
 
     // MARK: - Game Intents
-    func startGame() {
+    func startGame(roundLength: Int = 60) {
         score = 0
-        timeRemaining = 60
+        streak = 0
+        bestStreak = 0
+        correctTaps = 0
+        wrongTaps = 0
+        missedCards = 0
+        lastTapWasGolden = false
+
+        totalRoundLength = max(roundLength, 10)
+        timeRemaining = totalRoundLength
         lives = 3
         gameOver = false
         level = .l1
@@ -75,12 +110,39 @@ class LightItUpVM: ObservableObject {
         guard !gameOver else { return }
         
         if cards[card.id].isLit {
-            score += 1
+            let golden = cards[card.id].isGolden
+            let basePoints = golden ? goldenBonusPoints : 1
+            let comboBonus = streak / streakBonusEvery
+            score += basePoints + comboBonus
+
+            streak += 1
+            bestStreak = max(bestStreak, streak)
+            correctTaps += 1
+            lastTapWasGolden = golden
+
             cards[card.id].isLit = false
+            cards[card.id].isGolden = false
         } else {
-            lives -= 1
-            if lives <= 0 { endGame() }
+            wrongTaps += 1
+            registerMiss(livesLost: 1, missedCount: 1)
         }
+    }
+
+    // MARK: - Performance Grade (creative end-of-round summary)
+    var accuracy: Double {
+        let totalAttempts = correctTaps + wrongTaps + missedCards
+        guard totalAttempts > 0 else { return 0 }
+        return Double(correctTaps) / Double(totalAttempts)
+    }
+
+    /// A simple report-card grade combining accuracy and best combo, so the
+    /// game-over screen reflects skill, not just raw score.
+    var performanceGrade: String {
+        if accuracy >= 0.95 && bestStreak >= 12 { return "S" }
+        if accuracy >= 0.85 { return "A" }
+        if accuracy >= 0.7 { return "B" }
+        if accuracy >= 0.5 { return "C" }
+        return "D"
     }
 
     // MARK: - Private Game Logic
@@ -115,18 +177,40 @@ class LightItUpVM: ObservableObject {
     private func lightUpCards() {
         guard !gameOver else { return }
         
-        // Penalize for missed cards
+        // Penalize for missed cards. At L4/overdrive, several cards are lit at
+        // once — if the player only manages to tap one of them in time, the
+        // others left lit still count as "missed", but only ONE life is taken
+        // per tick regardless of how many were left over. This keeps a correct
+        // tap from being drowned out by losing 2-3 lives in the same instant.
         let missed = cards.filter { $0.isLit }.count
         if missed > 0 {
-            lives -= missed
-            if lives <= 0 { endGame() }
+            registerMiss(livesLost: 1, missedCount: missed)
         }
         
         guard !gameOver else { return }
         
         // Reset and light new cards
-        for i in cards.indices { cards[i].isLit = false }
-        cards.shuffled().prefix(level.litCount).forEach { cards[$0.id].isLit = true }
+        for i in cards.indices {
+            cards[i].isLit = false
+            cards[i].isGolden = false
+        }
+
+        let toLight = cards.shuffled().prefix(level.litCount)
+        var goldenAssigned = false
+        for lit in toLight {
+            cards[lit.id].isLit = true
+            if !goldenAssigned && Double.random(in: 0...1) < goldenChance {
+                cards[lit.id].isGolden = true
+                goldenAssigned = true
+            }
+        }
+    }
+
+    private func registerMiss(livesLost: Int, missedCount: Int) {
+        missedCards += missedCount
+        streak = 0
+        lives -= livesLost
+        if lives <= 0 { endGame() }
     }
 
     private func rebuildCards() {
@@ -134,14 +218,19 @@ class LightItUpVM: ObservableObject {
     }
 
     private func updateLevel() {
-        let elapsed = 60 - timeRemaining
+        let elapsed = totalRoundLength - timeRemaining
+        let fraction = Double(elapsed) / Double(totalRoundLength)
         let newLevel: GameLevel
-        
-        switch elapsed {
-        case 0..<15: newLevel = .l1
-        case 15..<30: newLevel = .l2
-        case 30..<40: newLevel = .l3
-        case 40..<50: newLevel = .l4
+
+        // L1-L4 occupy the spec'd proportions (25% / 25% / 25% / ~16.7%) of the
+        // round; the final ~8.3% is reserved for the bonus "overdrive" finale so
+        // it never eats into L4's window. At roundLength = 60 this reproduces
+        // the exact slide brackets: 0-15 / 15-30 / 30-45 / 45-55 / 55-60.
+        switch fraction {
+        case ..<0.25: newLevel = .l1
+        case 0.25..<0.50: newLevel = .l2
+        case 0.50..<0.75: newLevel = .l3
+        case 0.75..<(11.0 / 12.0): newLevel = .l4
         default: newLevel = .overdrive
         }
         
@@ -149,8 +238,8 @@ class LightItUpVM: ObservableObject {
             level = newLevel
             showLevelFlash = true
             
-            // Turn off the flash after 0.2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            // Turn off the flash after long enough for the player to actually read it
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { [weak self] in
                 self?.showLevelFlash = false
             }
             
