@@ -56,7 +56,7 @@ class StatsVM: ObservableObject {
             incorrectAnswers: incorrectAnswers,
             genre: genre
         )
-
+        
         sessions.insert(newSession, at: 0)
         persistData()
     }
@@ -81,4 +81,33 @@ class StatsVM: ObservableObject {
     func clearAllSessions() {
         sessions.removeAll()
         UserDefaults.standard.removeObject(forKey: saveKey)
-    }}
+    }
+    
+    
+    // Consecutive days (ending today or yesterday) with at least one session —
+    // shared by Home and Stats so both read the same definition of "streak."
+    var currentStreak: Int {
+        let calendar = Calendar.current
+        let playedDays = Set(sessions.map { calendar.startOfDay(for: $0.timestamp) })
+        guard !playedDays.isEmpty else { return 0 }
+        
+        var cursor = calendar.startOfDay(for: Date())
+        if !playedDays.contains(cursor) {
+            cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+        }
+        
+        var streak = 0
+        while playedDays.contains(cursor) {
+            streak += 1
+            cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+        }
+        return streak
+    }
+    
+    // Whichever mode currently holds the single highest score, if any.
+    var topMode: GameMode? {
+        let ranked = GameMode.allCases.map { ($0, highestScore(for: $0)) }
+        guard let best = ranked.max(by: { $0.1 < $1.1 }), best.1 > 0 else { return nil }
+        return best.0
+    }
+}
