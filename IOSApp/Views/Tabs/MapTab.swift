@@ -25,6 +25,9 @@ struct MapTab: View {
     // Tapping a pin opens a detail sheet instead of only showing the floating label.
     @State private var selectedSession: GameSession?
 
+    // Entrance animation for the chrome, matching Home/Stats.
+    @State private var appeared = false
+
     private var filteredSessions: [GameSession] {
         statsVM.sessions.filter { session in
             let matchesMode: Bool
@@ -42,6 +45,10 @@ struct MapTab: View {
 
     var body: some View {
         ZStack {
+            // Base fill shows for a beat before map tiles load, so there's
+            // never a flash of white behind the UI chrome.
+            AppTheme.background.ignoresSafeArea()
+
             Map(position: $position) {
                 ForEach(filteredSessions) { session in
                     Annotation(session.mode.rawValue, coordinate: getJitteredCoordinate(for: session)) {
@@ -53,18 +60,41 @@ struct MapTab: View {
                     }
                 }
             }
+            // 🌘 Forces Apple's dark map tiles regardless of system appearance,
+            // strips POI/transit clutter, and flattens elevation — reads like a
+            // clean game-world map instead of a real-world nav app.
+            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
+            .environment(\.colorScheme, .dark)
             .onMapCameraChange(frequency: .continuous) { context in
                 liveCamera = context.camera
             }
             .ignoresSafeArea(edges: .bottom)
+            // Subtle brand-colored wash over the tiles so the map's blues/greens
+            // pick up the same tint as the rest of the app rather than looking
+            // like a foreign surface dropped into the UI.
+            .overlay(
+                LinearGradient(
+                    colors: [AppTheme.background.opacity(0.35), .clear, AppTheme.brand.opacity(0.12)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .blendMode(.multiply)
+                .allowsHitTesting(false)
+            )
 
             VStack(spacing: 8) {
                 filterBar
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : -12)
+
                 if filteredSessions.isEmpty {
                     emptyState
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
                 Spacer()
             }
+            .animation(.easeOut(duration: 0.4), value: appeared)
+            .animation(.easeInOut(duration: 0.25), value: filteredSessions.isEmpty)
 
             VStack {
                 Spacer()
@@ -75,10 +105,16 @@ struct MapTab: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 16)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 12)
+                .animation(.easeOut(duration: 0.4).delay(0.1), value: appeared)
             }
         }
         .navigationTitle("Activity Map")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .onAppear { appeared = true }
         .sheet(item: $selectedSession) { session in
             sessionDetailSheet(session)
         }
@@ -107,11 +143,21 @@ struct MapTab: View {
         }
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+        .environment(\.colorScheme, .dark)   // ← moved off the Material, onto the view
     }
-
+    
+    
     func modeChip(_ option: MapFilterOption, label: String, color: Color) -> some View {
         let isSelected = modeFilter == option
+        let count: Int = {
+            switch option {
+            case .all: return statsVM.sessions.filter { dateRange.contains($0.timestamp) }.count
+            case .mode(let m): return statsVM.sessions.filter { $0.mode == m && dateRange.contains($0.timestamp) }.count
+            }
+        }()
+
         return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             withAnimation(.spring(response: 0.3)) { modeFilter = option }
         } label: {
             HStack(spacing: 6) {
@@ -120,6 +166,11 @@ struct MapTab: View {
                 }
                 Text(label)
                     .font(.system(size: 12, weight: .semibold))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(isSelected ? .white.opacity(0.85) : AppTheme.textMuted)
+                }
             }
             .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
             .padding(.horizontal, 14)
@@ -137,9 +188,14 @@ struct MapTab: View {
 
     var legendCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("\(filteredSessions.count) \(filteredSessions.count == 1 ? "session" : "sessions")")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(AppTheme.textPrimary)
+            HStack(spacing: 6) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(AppTheme.brand)
+                Text("\(filteredSessions.count) \(filteredSessions.count == 1 ? "session" : "sessions")")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(AppTheme.textPrimary)
+            }
 
             if let best = bestSession {
                 HStack(spacing: 6) {
@@ -152,13 +208,13 @@ struct MapTab: View {
         }
         .padding(12)
         .background(.ultraThinMaterial)
+        .environment(\.colorScheme, .dark)
         .cornerRadius(AppTheme.radiusButton)
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.radiusButton)
                 .stroke(AppTheme.cardBorder, lineWidth: 1)
         )
     }
-
     // MARK: - Empty State
 
     var emptyState: some View {
@@ -173,6 +229,7 @@ struct MapTab: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18)
         .background(.ultraThinMaterial)
+        .environment(\.colorScheme, .dark)
         .cornerRadius(AppTheme.radiusCard)
         .padding(.horizontal, 40)
     }
@@ -180,7 +237,9 @@ struct MapTab: View {
     // MARK: - Pin
 
     func pinView(for session: GameSession) -> some View {
-        VStack(spacing: 0) {
+        let isSelected = selectedSession?.id == session.id
+
+        return VStack(spacing: 0) {
             VStack(spacing: 4) {
                 Text(session.mode.rawValue.uppercased())
                     .font(.system(size: 10, weight: .black))
@@ -196,7 +255,12 @@ struct MapTab: View {
             .background(session.mode.themeColor)
             .foregroundColor(.white)
             .cornerRadius(10)
-            .shadow(color: .black.opacity(0.3), radius: 5, y: 5)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(.white.opacity(0.25), lineWidth: 1)
+            )
+            .shadow(color: session.mode.themeColor.opacity(0.6), radius: 8, y: 4)
+            .scaleEffect(isSelected ? 1.08 : 1.0)
 
             Image(systemName: "triangle.fill")
                 .font(.caption2)
@@ -204,6 +268,7 @@ struct MapTab: View {
                 .rotationEffect(.degrees(180))
                 .offset(y: -2)
         }
+        .animation(.spring(response: 0.3), value: isSelected)
     }
 
     // MARK: - Controls (recenter + zoom)
@@ -215,7 +280,7 @@ struct MapTab: View {
                     .font(.title2)
                     .foregroundColor(AppTheme.brand)
             }
-            Divider().frame(width: 24)
+            Divider().frame(width: 24).overlay(AppTheme.cardBorder)
             Button { zoom(by: 0.5) } label: {
                 Image(systemName: "plus")
                     .font(.title2)
@@ -230,6 +295,7 @@ struct MapTab: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 10)
         .background(.ultraThinMaterial)
+        .environment(\.colorScheme, .dark)
         .cornerRadius(AppTheme.radiusButton)
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.radiusButton)
