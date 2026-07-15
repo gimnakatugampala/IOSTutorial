@@ -6,8 +6,8 @@
 //
 //  Redesigned to match the rest of the app's dark AppTheme instead of
 //  default system colors, and to surface more than just a bar chart:
-//  an at-a-glance overview, tappable per-mode filter cards, and richer
-//  session rows.
+//  an at-a-glance overview, tappable per-mode filter cards, a chart
+//  filterable by date range + metric, and richer session rows.
 
 import SwiftUI
 import Charts
@@ -20,8 +20,7 @@ struct StatsTab: View {
     @State private var selectedMode: GameMode? = nil
     @State private var selectedDateRange: StatsDateRange = .allTime
     @State private var selectedMetric: StatsMetric = .highScore
-    
-    
+
     private var totalGamesPlayed: Int { statsVM.sessions.count }
     private var totalScore: Int { statsVM.sessions.reduce(0) { $0 + $1.score } }
 
@@ -29,14 +28,13 @@ struct StatsTab: View {
         guard let mode = selectedMode else { return statsVM.sessions }
         return statsVM.sessions.filter { $0.mode == mode }
     }
-    
+
     /// Sessions within the currently selected date range — feeds only the chart,
     /// so the overview cards and full session list above/below still show everything.
     private var chartSessions: [GameSession] {
         statsVM.sessions.filter { selectedDateRange.contains($0.timestamp) }
     }
-    
-    
+
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -146,7 +144,7 @@ struct StatsTab: View {
         }
         .buttonStyle(PressableStyle())
     }
-    
+
     private func metricValue(for mode: GameMode) -> Int {
         let modeSessions = chartSessions.filter { $0.mode == mode }
         guard !modeSessions.isEmpty else { return 0 }
@@ -162,6 +160,7 @@ struct StatsTab: View {
             return modeSessions.reduce(0) { $0 + $1.score }
         }
     }
+
     // MARK: - Chart
 
     var highScoreChartSection: some View {
@@ -332,7 +331,7 @@ struct StatsTab: View {
                 Text(session.timestamp.formatted(date: .abbreviated, time: .shortened))
                     .font(.system(size: 11))
                     .foregroundColor(AppTheme.textMuted)
-                
+
                 if let detail = session.detailText {
                     Text(detail)
                         .font(.system(size: 10, weight: .semibold))
@@ -382,37 +381,10 @@ struct StatsTab: View {
     }
 }
 
-// MARK: - Per-mode display helpers
-// Mirrors the same icon/color choices already used on the Home tab and Map
-// tab, so Stats reads as part of the same visual language rather than
-// re-deriving its own palette.
-private extension GameMode {
-    var icon: String {
-        switch self {
-        case .tapFrenzy: return "hand.tap.fill"
-        case .lightItUp: return "lightbulb.max.fill"
-        case .quizRush: return "questionmark.bubble.fill"
-        }
-    }
+// MARK: - Filter enums
+// icon/color/shortLabel per mode now live on GameMode itself (GameMode.swift),
+// shared by Stats, Map, and Home tabs — nothing per-mode is redeclared here.
 
-    var themeColor: Color {
-        switch self {
-        case .tapFrenzy: return AppTheme.tapFrenzy
-        case .lightItUp: return AppTheme.lightItUp
-        case .quizRush: return AppTheme.quizRush
-        }
-    }
-
-    var shortLabel: String {
-        switch self {
-        case .tapFrenzy: return "Tap"
-        case .lightItUp: return "Light"
-        case .quizRush: return "Quiz"
-        }
-    }
-}
-
-// FIlter by date
 enum StatsDateRange: String, CaseIterable, Identifiable {
     case today = "Today"
     case week = "7 Days"
@@ -453,6 +425,7 @@ enum StatsMetric: String, CaseIterable, Identifiable {
         }
     }
 }
+
 #Preview {
     NavigationStack {
         StatsTab()
