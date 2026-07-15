@@ -7,7 +7,9 @@
 //  Redesigned to match the rest of the app's dark AppTheme instead of
 //  default system colors, and to surface more than just a bar chart:
 //  an at-a-glance overview, tappable per-mode filter cards, a chart
-//  filterable by date range + metric, and richer session rows.
+//  filterable by date range + metric, richer session rows, a proper
+//  zero-state, ambient background glow to match Home, and small reward
+//  touches (streak badge, top-mode crown) so the page feels alive.
 
 import SwiftUI
 import Charts
@@ -20,6 +22,11 @@ struct StatsTab: View {
     @State private var selectedMode: GameMode? = nil
     @State private var selectedDateRange: StatsDateRange = .allTime
     @State private var selectedMetric: StatsMetric = .highScore
+
+    // Entrance + ambient animation state — mirrors HomeTab's pattern so
+    // this tab feels part of the same app rather than a bolted-on screen.
+    @State private var appeared = false
+    @State private var animateGlow = false
 
     private var totalGamesPlayed: Int { statsVM.sessions.count }
     private var totalScore: Int { statsVM.sessions.reduce(0) { $0 + $1.score } }
@@ -35,27 +42,152 @@ struct StatsTab: View {
         statsVM.sessions.filter { selectedDateRange.contains($0.timestamp) }
     }
 
+    /// Consecutive days (ending today or yesterday) with at least one session —
+    /// a small "keep it going" signal, same spirit as a workout-app streak.
+    private var currentStreak: Int {
+        let calendar = Calendar.current
+        let playedDays = Set(statsVM.sessions.map { calendar.startOfDay(for: $0.timestamp) })
+        guard !playedDays.isEmpty else { return 0 }
+
+        var cursor = calendar.startOfDay(for: Date())
+        if !playedDays.contains(cursor) {
+            cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+        }
+
+        var streak = 0
+        while playedDays.contains(cursor) {
+            streak += 1
+            cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+        }
+        return streak
+    }
+
+    /// Whichever mode currently holds the single highest score across all
+    /// sessions — gets a small crown badge on its overview card.
+    private var topMode: GameMode? {
+        let ranked = GameMode.allCases.map { ($0, statsVM.highestScore(for: $0)) }
+        guard let best = ranked.max(by: { $0.1 < $1.1 }), best.1 > 0 else { return nil }
+        return best.0
+    }
+
     var body: some View {
         ZStack {
+            backgroundGlow
             AppTheme.background.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    overviewSection
-                    highScoreChartSection
-                    recentSessionsSection
+            if statsVM.sessions.isEmpty {
+                fullEmptyState
+            } else {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        overviewSection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 16)
+                            .animation(.easeOut(duration: 0.45), value: appeared)
+
+                        highScoreChartSection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 16)
+                            .animation(.easeOut(duration: 0.45).delay(0.08), value: appeared)
+
+                        recentSessionsSection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 16)
+                            .animation(.easeOut(duration: 0.45).delay(0.16), value: appeared)
+                    }
+                    .padding(.top, 12)
+                    .padding(.bottom, 30)
                 }
-                .padding(.top, 12)
-                .padding(.bottom, 30)
             }
         }
         .navigationTitle("Statistics")
+        .onAppear {
+            appeared = true
+            animateGlow = true
+        }
+    }
+
+    // MARK: - Ambient Background
+    // Same blurred-circle language as HomeTab, kept much lower-opacity here
+    // since this screen is text/data-dense and needs to stay readable.
+
+    var backgroundGlow: some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.brand.opacity(0.16))
+                .frame(width: 280, height: 280)
+                .blur(radius: 110)
+                .offset(x: animateGlow ? 120 : -110, y: animateGlow ? -260 : -220)
+                .animation(.easeInOut(duration: 10).repeatForever(autoreverses: true), value: animateGlow)
+
+            Circle()
+                .fill(AppTheme.lightItUp.opacity(0.12))
+                .frame(width: 240, height: 240)
+                .blur(radius: 100)
+                .offset(x: animateGlow ? -110 : 110, y: animateGlow ? 320 : 360)
+                .animation(.easeInOut(duration: 12).repeatForever(autoreverses: true), value: animateGlow)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    // MARK: - Section Header Helper
+    // One consistent icon+title treatment reused by the chart and session
+    // list headers instead of each rolling its own plain Text.
+
+    func sectionHeader(title: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(AppTheme.brand)
+            Text(title)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(AppTheme.textPrimary)
+        }
+    }
+
+    // MARK: - Full Empty State
+    // Shown only when there are truly zero sessions ever recorded — replaces
+    // the old look of an overview full of zeroes plus three separate
+    // "no data" placeholders stacked on top of each other.
+
+    var fullEmptyState: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 60))
+                .foregroundStyle(
+                    LinearGradient(colors: [AppTheme.brand, AppTheme.lightItUp], startPoint: .top, endPoint: .bottom)
+                )
+                .shadow(color: AppTheme.brand.opacity(0.4), radius: 16)
+
+            VStack(spacing: 8) {
+                Text("No Stats Yet")
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .foregroundColor(AppTheme.textPrimary)
+                Text("Play a round of any game and your scores, streaks, and history will show up here.")
+                    .font(.subheadline)
+                    .foregroundColor(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+        }
+        .opacity(appeared ? 1 : 0)
+        .animation(.easeOut(duration: 0.5), value: appeared)
     }
 
     // MARK: - Overview
 
     var overviewSection: some View {
         VStack(spacing: 14) {
+            HStack {
+                sectionHeader(title: "Overview", icon: "chart.pie.fill")
+                Spacer()
+                if currentStreak > 0 {
+                    streakBadge
+                }
+            }
+            .padding(.horizontal)
+
             HStack(spacing: 12) {
                 overviewStat(title: "Games Played", value: "\(totalGamesPlayed)", icon: "gamecontroller.fill", color: AppTheme.brand)
                 overviewStat(title: "Total Score", value: "\(totalScore)", icon: "star.fill", color: AppTheme.warning)
@@ -69,6 +201,23 @@ struct StatsTab: View {
             }
             .padding(.horizontal)
         }
+    }
+
+    var streakBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text("\(currentStreak) day\(currentStreak == 1 ? "" : "s")")
+                .font(.system(size: 11, weight: .bold))
+        }
+        .foregroundColor(AppTheme.warning)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(AppTheme.warning.opacity(0.15))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule().stroke(AppTheme.warning.opacity(0.35), lineWidth: 1)
+        )
     }
 
     func overviewStat(title: String, value: String, icon: String, color: Color) -> some View {
@@ -103,6 +252,7 @@ struct StatsTab: View {
         let isSelected = selectedMode == mode
         let color = mode.themeColor
         let played = statsVM.sessions.filter { $0.mode == mode }.count
+        let isTop = topMode == mode
 
         return Button {
             let generator = UIImpactFeedbackGenerator(style: .light)
@@ -111,36 +261,49 @@ struct StatsTab: View {
                 selectedMode = isSelected ? nil : mode
             }
         } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(isSelected ? 0.3 : 0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: mode.icon)
-                        .foregroundColor(color)
-                        .font(.system(size: 15, weight: .bold))
+            ZStack(alignment: .topTrailing) {
+                VStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(color.opacity(isSelected ? 0.3 : 0.15))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: mode.icon)
+                            .foregroundColor(color)
+                            .font(.system(size: 15, weight: .bold))
+                    }
+
+                    Text("\(statsVM.highestScore(for: mode))")
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.textPrimary)
+
+                    Text(mode.shortLabel.uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(AppTheme.textSecondary)
+
+                    Text(played == 1 ? "1 game" : "\(played) games")
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundColor(AppTheme.textMuted)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(isSelected ? color.opacity(0.14) : Color.white.opacity(0.03))
+                .cornerRadius(AppTheme.radiusButton)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusButton)
+                        .stroke(isSelected ? color.opacity(0.7) : AppTheme.cardBorder, lineWidth: isSelected ? 1.5 : 1)
+                )
 
-                Text("\(statsVM.highestScore(for: mode))")
-                    .font(.system(size: 18, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
-
-                Text(mode.shortLabel.uppercased())
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(AppTheme.textSecondary)
-
-                Text(played == 1 ? "1 game" : "\(played) games")
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(AppTheme.textMuted)
+                if isTop {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(5)
+                        .background(AppTheme.warning)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(AppTheme.background, lineWidth: 2))
+                        .offset(x: 6, y: -6)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(isSelected ? color.opacity(0.14) : Color.white.opacity(0.03))
-            .cornerRadius(AppTheme.radiusButton)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.radiusButton)
-                    .stroke(isSelected ? color.opacity(0.7) : AppTheme.cardBorder, lineWidth: isSelected ? 1.5 : 1)
-            )
         }
         .buttonStyle(PressableStyle())
     }
@@ -166,9 +329,7 @@ struct StatsTab: View {
     var highScoreChartSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("\(selectedMetric.rawValue) by Mode")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.textPrimary)
+                sectionHeader(title: "\(selectedMetric.rawValue) by Mode", icon: "chart.bar.xaxis")
 
                 Spacer()
 
@@ -270,9 +431,10 @@ struct StatsTab: View {
     var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(selectedMode == nil ? "Recent Sessions" : "\(selectedMode!.rawValue) Sessions")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.textPrimary)
+                sectionHeader(
+                    title: selectedMode == nil ? "Recent Sessions" : "\(selectedMode!.rawValue) Sessions",
+                    icon: "clock.arrow.circlepath"
+                )
 
                 Text("\(filteredSessions.count)")
                     .font(.system(size: 12, weight: .bold))
