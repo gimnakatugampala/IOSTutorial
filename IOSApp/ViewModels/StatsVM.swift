@@ -76,4 +76,9 @@ class StatsVM: ObservableObject {
         let modeSessions = sessions.filter { $0.mode == mode }
         return modeSessions.map { $0.score }.max() ?? 0
     }
-}
+    
+    // Call this from Settings' "Clear All Game Data" action.
+    func clearAllSessions() {
+        sessions.removeAll()
+        UserDefaults.standard.removeObject(forKey: saveKey)
+    }}
