@@ -22,7 +22,8 @@ struct SettingsTab: View {
 
     // Confirmation + feedback state for destructive data actions
     @State private var showClearConfirm = false
-    @State private var showClearedToast = false
+    @State private var showResetScoresConfirm = false
+    @State private var toastMessage: String? = nil
 
     @State private var appeared = false
 
@@ -82,6 +83,28 @@ struct SettingsTab: View {
                     }
 
                     settingsCard(
+                        title: "High Scores",
+                        icon: "trophy.fill",
+                        tint: AppTheme.warning,
+                        footer: "Resets every best score across Tap Frenzy, Light It Up, and Quiz Rush back to zero. Session history and map pins are not affected."
+                    ) {
+                        Button {
+                            showResetScoresConfirm = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text("Reset All High Scores")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .opacity(0.5)
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.danger)
+                        }
+                    }
+
+                    settingsCard(
                         title: "Data Management",
                         icon: "externaldrive.fill",
                         tint: AppTheme.danger,
@@ -110,7 +133,7 @@ struct SettingsTab: View {
                 .padding(.bottom, 30)
             }
 
-            if showClearedToast {
+            if toastMessage != nil {
                 clearedToast
             }
         }
@@ -126,11 +149,25 @@ struct SettingsTab: View {
                     statsVM.clearAllSessions()
                 }
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
-                presentClearedToast()
+                presentToast("Game data cleared")
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes every recorded session and map pin. High scores stay untouched. This can't be undone.")
+        }
+        .confirmationDialog(
+            "Reset all high scores?",
+            isPresented: $showResetScoresConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Reset High Scores", role: .destructive) {
+                resetAllHighScores()
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                presentToast("High scores reset")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This sets every mode's best score back to 0. Session history stays untouched. This can't be undone.")
         }
     }
 
@@ -263,14 +300,16 @@ struct SettingsTab: View {
         return "\(version) (\(build))"
     }
 
-    // MARK: - Cleared Toast
+    // MARK: - Toast
+    // Generic now — shared by "Clear All Game Data" and "Reset All High Scores"
+    // instead of each destructive action needing its own toast state.
 
     var clearedToast: some View {
         VStack {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(AppTheme.success)
-                Text("Game data cleared")
+                Text(toastMessage ?? "")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(AppTheme.textPrimary)
             }
@@ -291,10 +330,26 @@ struct SettingsTab: View {
         .zIndex(1)
     }
 
-    private func presentClearedToast() {
-        withAnimation(.spring(response: 0.35)) { showClearedToast = true }
+    private func presentToast(_ message: String) {
+        withAnimation(.spring(response: 0.35)) { toastMessage = message }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            withAnimation(.easeOut(duration: 0.3)) { showClearedToast = false }
+            withAnimation(.easeOut(duration: 0.3)) { toastMessage = nil }
+        }
+    }
+
+    // MARK: - Reset High Scores
+    // Deliberately separate from clearAllSessions() — a player might want a
+    // fresh leaderboard chase without losing their play history, or the
+    // reverse, so the two destructive actions are kept independent.
+
+    private func resetAllHighScores() {
+        let keys = [
+            "tapFrenzyHighScore", "tapFrenzyHighScore_easy", "tapFrenzyHighScore_medium", "tapFrenzyHighScore_hard",
+            "lightItUpHighScore", "lightItUpHighScore_30", "lightItUpHighScore_60", "lightItUpHighScore_90",
+            "quizRushHighScore"
+        ]
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
         }
     }
 }
