@@ -1,11 +1,12 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct IOSAppApp: App {
     @StateObject private var statsVM = StatsVM()
     // 1. Initialize the new location service
     @StateObject private var locationService = LocationService()
-    
+
     var body: some Scene {
         WindowGroup {
             MainTabView()
@@ -15,6 +16,7 @@ struct IOSAppApp: App {
                 // 3. Ask for permission as soon as the app opens
                 .onAppear {
                     locationService.requestPermission()
+                    UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
                 }
         }
     }
