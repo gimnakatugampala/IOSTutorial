@@ -7,14 +7,15 @@
 //  Rebuilt off the stock Form (which was rendering in the system's default
 //  light/dark chrome, disconnected from the rest of the app) into the same
 //  card-based dark language as Home/Stats/Map, with a working notification
-//  toggle and a real, confirmed "Clear All Game Data" / "Reset High Scores"
-//  action.
+//  toggle, an accent color picker, and a real, confirmed "Clear All Game
+//  Data" / "Reset High Scores" action.
 
 import SwiftUI
 import UserNotifications
 
 struct SettingsTab: View {
     @EnvironmentObject var statsVM: StatsVM
+    @EnvironmentObject var themeManager: ThemeManager
 
     // Persisted reminder settings. Date isn't natively AppStorage-compatible,
     // so the time is stored as hour/minute ints and rebuilt into a Date only
@@ -65,6 +66,15 @@ struct SettingsTab: View {
             ScrollView {
                 VStack(spacing: 20) {
                     header
+
+                    settingsCard(
+                        title: "Appearance",
+                        icon: "paintpalette.fill",
+                        tint: AppTheme.brand,
+                        footer: "Sets the app's accent color — used for primary buttons, Quiz Rush's theme, and highlighted UI throughout the app."
+                    ) {
+                        accentColorPicker
+                    }
 
                     settingsCard(
                         title: "Light It Up",
@@ -314,6 +324,47 @@ struct SettingsTab: View {
         .animation(.easeOut(duration: 0.4).delay(0.08), value: appeared)
     }
 
+    // MARK: - Accent Color Picker
+    // Curated swatches (not a full color wheel) so every option stays
+    // readable against the app's dark background and doesn't collide with
+    // the fixed semantic colors (success/danger/warning).
+
+    var accentColorPicker: some View {
+        HStack(spacing: 14) {
+            ForEach(AccentOption.allCases) { option in
+                let isSelected = themeManager.accent == option
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.spring(response: 0.3)) { themeManager.accent = option }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(option.color)
+                            .frame(width: 36, height: 36)
+
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .black))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .overlay(
+                        Circle().stroke(Color.white.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
+                    )
+                    .overlay(
+                        Circle().stroke(AppTheme.cardBorder, lineWidth: 1)
+                    )
+                    .scaleEffect(isSelected ? 1.12 : 1.0)
+                    .shadow(color: option.color.opacity(isSelected ? 0.5 : 0), radius: 8)
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel(option.displayName)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
     // MARK: - Round Length Picker
 
     var roundLengthPicker: some View {
@@ -419,5 +470,6 @@ struct SettingsTab: View {
     NavigationStack {
         SettingsTab()
             .environmentObject(StatsVM())
+            .environmentObject(ThemeManager())
     }
 }
