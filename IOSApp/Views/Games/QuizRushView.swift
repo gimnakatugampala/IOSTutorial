@@ -223,16 +223,18 @@ struct QuizRushView: View {
         }
         .onAppear {
             if viewModel.score > highScore { highScore = viewModel.score }
-
-            statsVM.saveNewSession(
-                mode: .quizRush,
-                score: viewModel.score,
-                lat: locationService.latitude,
-                lon: locationService.longitude,
-                correctAnswers: viewModel.correctCount,
-                incorrectAnswers: viewModel.incorrectCount,
-                genre: viewModel.selectedCategory.displayName
-            )
+            
+            locationService.awaitLocation { lat, lon in
+                statsVM.saveNewSession(
+                    mode: .quizRush,
+                    score: viewModel.score,
+                    lat: lat,
+                    lon: lon,
+                    correctAnswers: viewModel.correctCount,
+                    incorrectAnswers: viewModel.incorrectCount,
+                    genre: viewModel.selectedCategory.displayName
+                )
+            }
         }
     }
     

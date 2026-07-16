@@ -267,13 +267,15 @@ struct TapFrenzyView: View {
         .padding(.horizontal, 30)
         .onAppear {
             saveHighScore()
-            statsVM.saveNewSession(
-                mode: .tapFrenzy,
-                score: vm.score,
-                lat: locationService.latitude,
-                lon: locationService.longitude,
-                difficulty: vm.difficulty.rawValue
-            )
+            locationService.awaitLocation { lat, lon in
+                statsVM.saveNewSession(
+                    mode: .tapFrenzy,
+                    score: vm.score,
+                    lat: lat,
+                    lon: lon,
+                    difficulty: vm.difficulty.rawValue
+                )
+            }
         }
     }
 

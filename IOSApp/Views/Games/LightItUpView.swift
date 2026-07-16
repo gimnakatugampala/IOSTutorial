@@ -298,13 +298,14 @@ struct LightItUpView: View {
         .padding(.horizontal, 30)
         .onAppear {
             saveHighScores()
-            statsVM.saveNewSession(
+            locationService.awaitLocation { lat, lon in            statsVM.saveNewSession(
                 mode: .lightItUp,
                 score: vm.score,
-                lat: locationService.latitude,
-                lon: locationService.longitude,
+                lat: lat,
+                lon: lon,
                 levelReached: vm.level.label
             )
+        }
         }
     }
 
