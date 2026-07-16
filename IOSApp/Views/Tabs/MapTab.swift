@@ -42,6 +42,8 @@ struct MapTab: View {
     private var bestSession: GameSession? {
         filteredSessions.max(by: { $0.score < $1.score })
     }
+    
+    
 
     var body: some View {
         ZStack {
@@ -110,49 +112,49 @@ struct MapTab: View {
                 .animation(.easeOut(duration: 0.4).delay(0.1), value: appeared)
             }
         }
-        .navigationTitle("Activity Map")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear { appeared = true }
         .sheet(item: $selectedSession) { session in
             sessionDetailSheet(session)
         }
     }
 
-    // MARK: - Filter Bar
+  
+    // MARK: - Filter Bar (compact, single row, no background strip)
 
     var filterBar: some View {
-        VStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    modeChip(.all, label: "All", color: AppTheme.brand)
-                    ForEach(GameMode.allCases) { mode in
-                        modeChip(.mode(mode), label: mode.shortLabel, color: mode.themeColor)
-                    }
-                }
-                .padding(.horizontal)
+        HStack(spacing: 8) {
+            modeChip(.all)
+            ForEach(GameMode.allCases) { mode in
+                modeChip(.mode(mode))
             }
 
-            SegmentedFilterBar(
-                options: StatsDateRange.allCases,
-                selection: $dateRange,
-                label: { $0.rawValue }
-            )
-            .padding(.horizontal)
+            Spacer(minLength: 0)
+
+            dateRangeMenu
         }
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .environment(\.colorScheme, .dark)   // ← moved off the Material, onto the view
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
-    
-    
-    func modeChip(_ option: MapFilterOption, label: String, color: Color) -> some View {
+
+    func modeChip(_ option: MapFilterOption) -> some View {
         let isSelected = modeFilter == option
-        let count: Int = {
+        let color: Color = {
             switch option {
-            case .all: return statsVM.sessions.filter { dateRange.contains($0.timestamp) }.count
-            case .mode(let m): return statsVM.sessions.filter { $0.mode == m && dateRange.contains($0.timestamp) }.count
+            case .all: return AppTheme.brand
+            case .mode(let m): return m.themeColor
+            }
+        }()
+        let icon: String = {
+            switch option {
+            case .all: return "square.grid.2x2.fill"
+            case .mode(let m): return m.icon
+            }
+        }()
+        let label: String = {
+            switch option {
+            case .all: return "All"
+            case .mode(let m): return m.rawValue
             }
         }()
 
@@ -160,28 +162,48 @@ struct MapTab: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             withAnimation(.spring(response: 0.3)) { modeFilter = option }
         } label: {
-            HStack(spacing: 6) {
-                if case .mode = option {
-                    Circle().fill(color).frame(width: 8, height: 8)
-                }
-                Text(label)
-                    .font(.system(size: 12, weight: .semibold))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(isSelected ? .white.opacity(0.85) : AppTheme.textMuted)
-                }
-            }
-            .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(isSelected ? color : Color.white.opacity(0.06))
-            .clipShape(Capsule())
-            .overlay(
-                Capsule().stroke(isSelected ? Color.clear : AppTheme.cardBorder, lineWidth: 1)
-            )
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(isSelected ? .white : AppTheme.textSecondary)
+                .frame(width: 34, height: 50)
+                .background(isSelected ? AnyShapeStyle(color) : AnyShapeStyle(.ultraThinMaterial))
+                .clipShape(Circle())
+                .overlay(
+                    Circle().stroke(isSelected ? Color.clear : AppTheme.cardBorder, lineWidth: 1)
+                )
+                .shadow(color: isSelected ? color.opacity(0.5) : .clear, radius: 6, y: 2)
         }
         .buttonStyle(PressableStyle())
+        .accessibilityLabel(label)
+    }
+
+    var dateRangeMenu: some View {
+        Menu {
+            ForEach(StatsDateRange.allCases) { range in
+                Button {
+                    withAnimation(.spring(response: 0.3)) { dateRange = range }
+                } label: {
+                    if dateRange == range {
+                        Label(range.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(range.rawValue)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(dateRange.rawValue)
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(AppTheme.textPrimary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .environment(\.colorScheme, .dark)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(AppTheme.cardBorder, lineWidth: 1))
+        }
     }
 
     // MARK: - Legend / Summary Card
