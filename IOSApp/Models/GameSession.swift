@@ -21,6 +21,15 @@ struct GameSession: Identifiable, Codable {
     var incorrectAnswers: Int? = nil    // Quiz Rush
     var genre: String? = nil            // Quiz Rush
 
+    // Placeholder "player" fetched from randomuser.me the moment the session
+    // is saved (see StatsVM.saveNewSession) — gives the Map tab a name and
+    // face for each pin. Optional + defaulted like the fields above, so
+    // sessions saved before this feature existed keep decoding fine; they
+    // simply have no name/photo rather than the app crashing or backfilling
+    // one retroactively.
+    var playerName: String? = nil
+    var playerImageURL: String? = nil
+
     /// One-line subtitle for the Stats list, tailored per mode.
     var detailText: String? {
         switch mode {

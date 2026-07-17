@@ -15,7 +15,7 @@ struct MapTab: View {
             span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
         )
     )
-    @State private var liveCamera: MapCamera?
+    @State private var liveRegion: MKCoordinateRegion?
 
     // Filters — reuses StatsDateRange from StatsTab.swift so "7 Days" means
     // the same thing on both screens.
@@ -68,7 +68,7 @@ struct MapTab: View {
             .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
             .environment(\.colorScheme, .dark)
             .onMapCameraChange(frequency: .continuous) { context in
-                liveCamera = context.camera
+                liveRegion = context.region
             }
             .ignoresSafeArea(edges: .bottom)
             // Subtle brand-colored wash over the tiles so the map's blues/greens
@@ -263,6 +263,18 @@ struct MapTab: View {
 
         return VStack(spacing: 0) {
             VStack(spacing: 4) {
+                // Player identity — only shown for sessions that actually got
+                // one back from RandomUserService; older sessions (or ones
+                // saved while offline) just skip straight to the mode label.
+                if let name = session.playerName {
+                    HStack(spacing: 5) {
+                        playerAvatar(for: session, size: 16)
+                        Text(name)
+                            .font(.system(size: 9, weight: .bold))
+                            .lineLimit(1)
+                    }
+                }
+
                 Text(session.mode.rawValue.uppercased())
                     .font(.system(size: 10, weight: .black))
 
@@ -291,6 +303,25 @@ struct MapTab: View {
                 .offset(y: -2)
         }
         .animation(.spring(response: 0.3), value: isSelected)
+    }
+
+    /// Small circular avatar used on the pin itself. Falls back to nothing
+    /// (not a placeholder glyph) if there's no photo, so the pin's compact
+    /// layout doesn't reserve space for an icon that adds no information.
+    @ViewBuilder
+    func playerAvatar(for session: GameSession, size: CGFloat) -> some View {
+        if let urlString = session.playerImageURL, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().scaledToFill()
+                } else {
+                    Color.white.opacity(0.3)
+                }
+            }
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 0.75))
+        }
     }
 
     // MARK: - Controls (recenter + zoom)
@@ -337,16 +368,21 @@ struct MapTab: View {
                 .padding(.top, 8)
 
             HStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(session.mode.themeColor.opacity(0.18)).frame(width: 50, height: 50)
-                    Image(systemName: session.mode.icon)
-                        .foregroundColor(session.mode.themeColor)
-                        .font(.system(size: 20, weight: .bold))
-                }
+                detailAvatar(for: session)
+
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(session.mode.rawValue)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(AppTheme.textPrimary)
+                    if let name = session.playerName {
+                        Text(name)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(AppTheme.textPrimary)
+                        Text(session.mode.rawValue)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(session.mode.themeColor)
+                    } else {
+                        Text(session.mode.rawValue)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(AppTheme.textPrimary)
+                    }
                     Text(session.timestamp.formatted(date: .abbreviated, time: .shortened))
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.textMuted)
@@ -364,8 +400,40 @@ struct MapTab: View {
             Spacer(minLength: 0)
         }
         .padding(24)
-        .presentationDetents([.height(220)])
+        .presentationDetents([.height(240)])
         .background(AppTheme.background.ignoresSafeArea())
+    }
+
+    /// Larger avatar for the detail sheet — the session's real photo when
+    /// one exists, otherwise the same mode-icon badge used everywhere else
+    /// in the app so older sessions still look intentional, not broken.
+    @ViewBuilder
+    func detailAvatar(for session: GameSession) -> some View {
+        if let urlString = session.playerImageURL, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .failure:
+                    Image(systemName: session.mode.icon)
+                        .foregroundColor(session.mode.themeColor)
+                        .font(.system(size: 20, weight: .bold))
+                default:
+                    ProgressView()
+                }
+            }
+            .frame(width: 50, height: 50)
+            .background(session.mode.themeColor.opacity(0.18))
+            .clipShape(Circle())
+            .overlay(Circle().stroke(session.mode.themeColor.opacity(0.4), lineWidth: 1.5))
+        } else {
+            ZStack {
+                Circle().fill(session.mode.themeColor.opacity(0.18)).frame(width: 50, height: 50)
+                Image(systemName: session.mode.icon)
+                    .foregroundColor(session.mode.themeColor)
+                    .font(.system(size: 20, weight: .bold))
+            }
+        }
     }
 
     func detailPill(title: String, value: String) -> some View {
@@ -401,15 +469,25 @@ struct MapTab: View {
         )
     }
 
+    /// Zooms by scaling the visible region's span rather than a MapCamera's
+    /// distance. Distance-based zoom depended on `onMapCameraChange` keeping
+    /// a MapCamera in sync and was prone to silently doing nothing on zoom
+    /// out; span-based zoom is the same technique `recenterOnUser()` already
+    /// uses, and behaves symmetrically for both directions.
+    /// factor < 1 zooms in (smaller span), factor > 1 zooms out (larger span).
     private func zoom(by factor: Double) {
-        guard let camera = liveCamera else { return }
+        guard let region = liveRegion else { return }
+
+        // Clamp so a burst of taps can't shrink the span to ~0 (crashes/errors)
+        // or grow it past a full world view.
+        let newLatDelta = min(max(region.span.latitudeDelta * factor, 0.001), 100)
+        let newLonDelta = min(max(region.span.longitudeDelta * factor, 0.001), 100)
+
         withAnimation(.easeInOut(duration: 0.5)) {
-            position = .camera(
-                MapCamera(
-                    centerCoordinate: camera.centerCoordinate,
-                    distance: camera.distance * factor,
-                    heading: camera.heading,
-                    pitch: camera.pitch
+            position = .region(
+                MKCoordinateRegion(
+                    center: region.center,
+                    span: MKCoordinateSpan(latitudeDelta: newLatDelta, longitudeDelta: newLonDelta)
                 )
             )
         }

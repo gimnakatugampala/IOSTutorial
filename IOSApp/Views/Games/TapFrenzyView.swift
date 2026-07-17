@@ -281,13 +281,15 @@ struct TapFrenzyView: View {
         .onAppear {
             saveHighScore()
             locationService.awaitLocation { lat, lon in
-                statsVM.saveNewSession(
-                    mode: .tapFrenzy,
-                    score: vm.score,
-                    lat: lat,
-                    lon: lon,
-                    difficulty: vm.difficulty.rawValue
-                )
+                Task {
+                    await statsVM.saveNewSession(
+                        mode: .tapFrenzy,
+                        score: vm.score,
+                        lat: lat,
+                        lon: lon,
+                        difficulty: vm.difficulty.rawValue
+                    )
+                }
             }
         }
     }

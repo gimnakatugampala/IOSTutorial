@@ -4,7 +4,7 @@ struct QuizRushView: View {
     @StateObject private var viewModel = QuizRushViewModel()
     @Environment(\.dismiss) private var dismiss
     
-    //  1. Global Services for Map & Stats
+    // 1. Global Services for Map & Stats
     @EnvironmentObject var statsVM: StatsVM
     @EnvironmentObject var locationService: LocationService
     
@@ -232,15 +232,17 @@ struct QuizRushView: View {
             if viewModel.score > highScore { highScore = viewModel.score }
             
             locationService.awaitLocation { lat, lon in
-                statsVM.saveNewSession(
-                    mode: .quizRush,
-                    score: viewModel.score,
-                    lat: lat,
-                    lon: lon,
-                    correctAnswers: viewModel.correctCount,
-                    incorrectAnswers: viewModel.incorrectCount,
-                    genre: viewModel.selectedCategory.displayName
-                )
+                Task {
+                    await statsVM.saveNewSession(
+                        mode: .quizRush,
+                        score: viewModel.score,
+                        lat: lat,
+                        lon: lon,
+                        correctAnswers: viewModel.correctCount,
+                        incorrectAnswers: viewModel.incorrectCount,
+                        genre: viewModel.selectedCategory.displayName
+                    )
+                }
             }
         }
     }

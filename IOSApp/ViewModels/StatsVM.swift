@@ -32,7 +32,16 @@ class StatsVM: ObservableObject {
         }
     }
     
-    // Call this function whenever a game finishes
+    // Call this function whenever a game finishes.
+    //
+    // This also reaches out to RandomUserService (randomuser.me) for a
+    // placeholder "player" — a name + avatar — and attaches it to the saved
+    // session, so the Map tab can show who "played" each pin. That's why
+    // this is now async: every call site (the three game-over screens)
+    // wraps it in a `Task { await ... }`. If the lookup fails for any
+    // reason, the session still saves — it just has no name/photo, exactly
+    // like a session saved before this feature existed.
+    @MainActor
     func saveNewSession(
         mode: GameMode,
         score: Int,
@@ -43,7 +52,9 @@ class StatsVM: ObservableObject {
         correctAnswers: Int? = nil,
         incorrectAnswers: Int? = nil,
         genre: String? = nil
-    ) {
+    ) async {
+        let player = await RandomUserService.fetchRandomPlayer()
+
         let newSession = GameSession(
             mode: mode,
             score: score,
@@ -54,7 +65,9 @@ class StatsVM: ObservableObject {
             levelReached: levelReached,
             correctAnswers: correctAnswers,
             incorrectAnswers: incorrectAnswers,
-            genre: genre
+            genre: genre,
+            playerName: player?.name,
+            playerImageURL: player?.imageURL
         )
         
         sessions.insert(newSession, at: 0)

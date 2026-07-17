@@ -306,14 +306,17 @@ struct LightItUpView: View {
         .padding(.horizontal, 30)
         .onAppear {
             saveHighScores()
-            locationService.awaitLocation { lat, lon in            statsVM.saveNewSession(
-                mode: .lightItUp,
-                score: vm.score,
-                lat: lat,
-                lon: lon,
-                levelReached: vm.level.label
-            )
-        }
+            locationService.awaitLocation { lat, lon in
+                Task {
+                    await statsVM.saveNewSession(
+                        mode: .lightItUp,
+                        score: vm.score,
+                        lat: lat,
+                        lon: lon,
+                        levelReached: vm.level.label
+                    )
+                }
+            }
         }
     }
 
