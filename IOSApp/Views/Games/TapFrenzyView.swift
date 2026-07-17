@@ -12,6 +12,12 @@ struct TapFrenzyView: View {
     @State private var buttonPosition = CGPoint(x: 200, y: 400)
     @State private var buttonSize: CGFloat = 200
 
+    // Overall best score across all difficulties — this is the key HomeTab's
+    // dashboard badge reads, so it must be kept in sync alongside the
+    // per-difficulty scores below (same pattern as Light It Up's
+    // highScoreOverall / highScore30 / highScore60 / highScore90).
+    @AppStorage("tapFrenzyHighScore") private var highScoreOverall = 0
+
     @AppStorage("tapFrenzyHighScore_easy") private var highScoreEasy = 0
     @AppStorage("tapFrenzyHighScore_medium") private var highScoreMedium = 0
     @AppStorage("tapFrenzyHighScore_hard") private var highScoreHard = 0
@@ -287,6 +293,7 @@ struct TapFrenzyView: View {
     }
 
     func saveHighScore() {
+        if vm.score > highScoreOverall { highScoreOverall = vm.score }
         switch vm.difficulty {
         case .easy: if vm.score > highScoreEasy { highScoreEasy = vm.score }
         case .medium: if vm.score > highScoreMedium { highScoreMedium = vm.score }
