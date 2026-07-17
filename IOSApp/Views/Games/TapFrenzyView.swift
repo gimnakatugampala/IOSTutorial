@@ -26,6 +26,11 @@ struct TapFrenzyView: View {
         }
     }
 
+    /// Message handed to the system share sheet from the game-over screen.
+    private var shareText: String {
+        "I scored \(vm.score) points in Tap Frenzy (\(vm.difficulty.rawValue) difficulty) on Game Center! 🎮 Can you beat that?"
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -239,6 +244,8 @@ struct TapFrenzyView: View {
                         .cornerRadius(AppTheme.radiusButton)
                 }
                 .buttonStyle(PressableStyle())
+
+                ShareScoreButton(shareText: shareText, tint: AppTheme.tapFrenzy)
 
                 Button { dismiss() } label: {
                     Text("Main Menu")

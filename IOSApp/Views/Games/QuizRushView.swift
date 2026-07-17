@@ -4,11 +4,16 @@ struct QuizRushView: View {
     @StateObject private var viewModel = QuizRushViewModel()
     @Environment(\.dismiss) private var dismiss
     
-    // 🚨 1. Global Services for Map & Stats
+    //  1. Global Services for Map & Stats
     @EnvironmentObject var statsVM: StatsVM
     @EnvironmentObject var locationService: LocationService
     
     @AppStorage("quizRushHighScore") private var highScore = 0
+
+    /// Message handed to the system share sheet from the game-over screen.
+    private var shareText: String {
+        "I scored \(viewModel.score) points in Quiz Rush (\(viewModel.selectedCategory.displayName)) — \(viewModel.correctCount) correct! 🧠 Can you beat that?"
+    }
     
     var body: some View {
         ZStack {
@@ -209,6 +214,8 @@ struct QuizRushView: View {
                         .foregroundColor(.white).cornerRadius(AppTheme.radiusButton)
                 }
                 .buttonStyle(PressableStyle())
+
+                ShareScoreButton(shareText: shareText, tint: AppTheme.quizRush)
                 
                 Button {
                     viewModel.backToCategorySelection()

@@ -31,6 +31,12 @@ struct LightItUpView: View {
         }
     }
 
+    /// Message handed to the system share sheet from the game-over screen.
+    private var shareText: String {
+        let levelText = vm.level == .overdrive ? "Overdrive" : "Level \(vm.level.label)"
+        return "I scored \(vm.score) points in Light It Up, reaching \(levelText) with a \(vm.bestStreak)x streak! ⚡️ Can you beat that?"
+    }
+
     var body: some View {
         ZStack {
             // Background — matches the rest of the app's dark base + mode-tinted glow
@@ -270,6 +276,8 @@ struct LightItUpView: View {
                         .cornerRadius(AppTheme.radiusButton)
                 }
                 .buttonStyle(PressableStyle())
+
+                ShareScoreButton(shareText: shareText, tint: AppTheme.lightItUp)
 
                 Button { dismiss() } label: {
                     Text("Main Menu")
