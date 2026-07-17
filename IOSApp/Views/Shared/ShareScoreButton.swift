@@ -12,6 +12,7 @@
 //  everywhere instead of each mode rolling its own share UI. Uses the native
 //  SwiftUI ShareLink, which presents the system share sheet (Messages,
 //  Mail, social apps, copy, etc.) with no extra plumbing required.
+//
 
 import SwiftUI
 
@@ -23,11 +24,10 @@ struct ShareScoreButton: View {
 
     var body: some View {
         ShareLink(item: shareText) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 15, weight: .bold))
                 Text("Share Score")
-                Spacer()
             }
             .font(.headline)
             .foregroundColor(tint)
