@@ -18,7 +18,7 @@ import SwiftUI
 
 struct ShareScoreButton: View {
     /// The pre-built message to hand to the system share sheet, e.g.
-    /// "I scored 42 points in Tap Frenzy! 🎮"
+    /// "I scored 42 points in Tap Frenzy! "
     let shareText: String
     var tint: Color = AppTheme.brand
 
