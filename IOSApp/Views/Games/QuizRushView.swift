@@ -2,6 +2,7 @@ import SwiftUI
 
 struct QuizRushView: View {
     @StateObject private var viewModel = QuizRushViewModel()
+    @StateObject private var voice = QuizVoiceService()
     @Environment(\.dismiss) private var dismiss
     
     // 1. Global Services for Map & Stats
@@ -9,6 +10,12 @@ struct QuizRushView: View {
     @EnvironmentObject var locationService: LocationService
     
     @AppStorage("quizRushHighScore") private var highScore = 0
+
+    // Global accessibility preference set in Settings — Quiz Rush only reads
+    // questions/answers aloud automatically when this is on, and the manual
+    // speaker button in the header is likewise only shown when it's on, so
+    // sighted players who don't want narration never even see the control.
+    @AppStorage("quizRushVoiceEnabled") private var voiceEnabled = false
 
     /// Message handed to the system share sheet from the game-over screen.
     private var shareText: String {
@@ -27,13 +34,34 @@ struct QuizRushView: View {
             
             VStack {
                 HStack {
-                    Button { dismiss() } label: {
+                    Button {
+                        voice.stop()
+                        dismiss()
+                    } label: {
                         Image(systemName: "chevron.left.circle.fill").font(.title).foregroundColor(AppTheme.textPrimary.opacity(0.8))
                     }
+                    .accessibilityLabel("Back to main menu")
+
                     Spacer()
                     Text("QUIZ RUSH").font(.headline).bold().foregroundColor(AppTheme.quizRush)
                     Spacer()
-                    Image(systemName: "circle").opacity(0)
+
+                    // Manual "read it again" control — lets a VoiceOver/low-vision
+                    // player re-hear the current question and answers on demand,
+                    // separate from the automatic read-aloud on question change.
+                    if viewModel.state == .loaded && !viewModel.isGameOver && voiceEnabled {
+                        Button {
+                            let question = viewModel.questions[viewModel.currentIndex]
+                            voice.speakQuestion(question.text, answers: question.answers)
+                        } label: {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.title2)
+                                .foregroundColor(AppTheme.quizRush)
+                        }
+                        .accessibilityLabel("Read question and answers aloud")
+                    } else {
+                        Image(systemName: "circle").opacity(0)
+                    }
                 }.padding()
                 
                 switch viewModel.state {
@@ -71,6 +99,30 @@ struct QuizRushView: View {
         .task {
             // 🚨 2. Fetch GPS in the background while the player picks a genre
             locationService.fetchLocation()
+        }
+        // Auto-read the first question of a round the moment it finishes loading.
+        // All three handlers below are no-ops unless the player turned the
+        // "Read Quiz Questions Aloud" toggle on in Settings.
+        .onChange(of: viewModel.state) { newState in
+            guard voiceEnabled, newState == .loaded, !viewModel.isGameOver, !viewModel.questions.isEmpty else { return }
+            let question = viewModel.questions[viewModel.currentIndex]
+            voice.speakQuestion(question.text, answers: question.answers)
+        }
+        // Auto-read every subsequent question as the player advances.
+        .onChange(of: viewModel.currentIndex) { _ in
+            guard voiceEnabled, viewModel.state == .loaded, !viewModel.isGameOver, !viewModel.questions.isEmpty else { return }
+            let question = viewModel.questions[viewModel.currentIndex]
+            voice.speakQuestion(question.text, answers: question.answers)
+        }
+        // Announce whether the just-picked answer was right, and what the
+        // correct one was if not — fires once per answer, not on the reset to nil.
+        .onChange(of: viewModel.answerFeedback) { feedback in
+            guard voiceEnabled, let feedback else { return }
+            let correctAnswer = viewModel.questions[viewModel.currentIndex].correctAnswer
+            voice.speakResult(isCorrect: feedback, correctAnswer: correctAnswer)
+        }
+        .onDisappear {
+            voice.stop()
         }
     }
     
@@ -123,6 +175,7 @@ struct QuizRushView: View {
                             }
                         }
                         .buttonStyle(PressableStyle())
+                        .accessibilityLabel(category == .any ? "\(category.displayName), pick for me" : category.displayName)
                     }
                 }
                 .padding(.horizontal)
@@ -167,17 +220,20 @@ struct QuizRushView: View {
                 .overlay(RoundedRectangle(cornerRadius: AppTheme.radiusPill).stroke(AppTheme.cardBorder, lineWidth: 1))
                 .padding(.horizontal)
                 .offset(x: viewModel.shakeOffset)
+                .accessibilityLabel("Question \(viewModel.currentIndex + 1) of 10. \(viewModel.questions[viewModel.currentIndex].text)")
             
             Spacer()
             
             VStack(spacing: 15) {
-                ForEach(viewModel.questions[viewModel.currentIndex].answers, id: \.self) { answer in
+                ForEach(Array(viewModel.questions[viewModel.currentIndex].answers.enumerated()), id: \.offset) { index, answer in
                     Button { viewModel.checkAnswer(answer) } label: {
                         Text(answer).font(.headline).frame(maxWidth: .infinity).padding()
                             .background(buttonColor(for: answer)).foregroundColor(.white).cornerRadius(AppTheme.radiusButton - 1)
                     }
                     .buttonStyle(PressableStyle())
                     .disabled(viewModel.answerFeedback != nil)
+                    .accessibilityLabel("Option \(index + 1): \(answer)")
+                    .accessibilityHint("Double tap to select this answer")
                 }
             }.padding(.horizontal).padding(.bottom, 30)
         }
@@ -230,7 +286,11 @@ struct QuizRushView: View {
         }
         .onAppear {
             if viewModel.score > highScore { highScore = viewModel.score }
-            
+
+            if voiceEnabled {
+                voice.announce("Quiz complete! Final score: \(viewModel.score) points. \(viewModel.correctCount) correct, \(viewModel.incorrectCount) incorrect.")
+            }
+
             locationService.awaitLocation { lat, lon in
                 Task {
                     await statsVM.saveNewSession(

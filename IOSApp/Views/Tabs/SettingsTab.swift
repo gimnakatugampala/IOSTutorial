@@ -27,6 +27,12 @@ struct SettingsTab: View {
     // Light It Up round length — read directly by LightItUpView/LightItUpVM
     @AppStorage("lightItUpRoundLength") private var roundLength = 60
 
+    // Quiz Rush accessibility preference — read directly by QuizRushView.
+    // Off by default since most players don't want questions read aloud;
+    // this is the single switch that turns the whole feature (auto-read +
+    // the in-game speaker button) on for players who do.
+    @AppStorage("quizRushVoiceEnabled") private var quizVoiceEnabled = false
+
     // Confirmation + feedback state for destructive data actions
     @State private var showClearConfirm = false
     @State private var showResetScoresConfirm = false
@@ -74,6 +80,20 @@ struct SettingsTab: View {
                         footer: "Sets the app's accent color — used for primary buttons, Quiz Rush's theme, and highlighted UI throughout the app."
                     ) {
                         accentColorPicker
+                    }
+
+                    settingsCard(
+                        title: "Accessibility",
+                        icon: "accessibility",
+                        tint: AppTheme.quizRush,
+                        footer: "When on, Quiz Rush automatically reads each question and its answer choices aloud, and announces whether you got it right — built for blind and low-vision players. A speaker button also appears in Quiz Rush so anyone can replay a question on demand."
+                    ) {
+                        Toggle(isOn: $quizVoiceEnabled.animation(.spring(response: 0.3))) {
+                            Text("Read Quiz Questions Aloud")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.textPrimary)
+                        }
+                        .tint(AppTheme.quizRush)
                     }
 
                     settingsCard(
