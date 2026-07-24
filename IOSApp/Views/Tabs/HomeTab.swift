@@ -79,7 +79,7 @@ struct HomeTab: View {
                             value: appeared
                         )
 
-                    featuredGameCard
+                    allGamesSection
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 16)
                         .animation(
@@ -91,15 +91,7 @@ struct HomeTab: View {
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 14)
                         .animation(
-                            .easeOut(duration: 0.45).delay(0.17),
-                            value: appeared
-                        )
-
-                    otherGames
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 18)
-                        .animation(
-                            .easeOut(duration: 0.5).delay(0.21),
+                            .easeOut(duration: 0.45).delay(0.19),
                             value: appeared
                         )
 
@@ -129,10 +121,24 @@ struct HomeTab: View {
         }
     }
 
-    // MARK: - Featured full-width game
+    // MARK: - All games (every mode uses the full-width "featured" card style)
 
-    private var featuredGameCard: some View {
-        let mode = featuredMode
+    private var allGamesSection: some View {
+        VStack(spacing: 20) {
+            gameCard(for: featuredMode)
+
+            ForEach(GameMode.allCases.filter { $0 != featuredMode }) { mode in
+                gameCard(for: mode)
+            }
+        }
+    }
+
+    /// Full-width hero-style card, shared by every game mode. The featured
+    /// mode additionally gets the "FEATURED GAME" / "MOST PLAYED" badge in
+    /// the top-left corner; the other modes show the same card minus that
+    /// badge so all three read as one consistent family.
+    private func gameCard(for mode: GameMode) -> some View {
+        let isFeatured = mode == featuredMode
 
         return NavigationLink(destination: destination(for: mode)) {
             ZStack(alignment: .bottomLeading) {
@@ -140,21 +146,23 @@ struct HomeTab: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Label(
-                            featuredLabel,
-                            systemImage: statsVM.topMode == nil
-                                ? "sparkles"
-                                : "flame.fill"
-                        )
-                        .font(
-                            .system(
-                                size: 9,
-                                weight: .black,
-                                design: .monospaced
+                        if isFeatured {
+                            Label(
+                                featuredLabel,
+                                systemImage: statsVM.topMode == nil
+                                    ? "sparkles"
+                                    : "flame.fill"
                             )
-                        )
-                        .tracking(1.6)
-                        .foregroundColor(.white.opacity(0.8))
+                            .font(
+                                .system(
+                                    size: 9,
+                                    weight: .black,
+                                    design: .monospaced
+                                )
+                            )
+                            .tracking(1.6)
+                            .foregroundColor(.white.opacity(0.8))
+                        }
 
                         Spacer()
 
@@ -266,7 +274,9 @@ struct HomeTab: View {
         .buttonStyle(PressableStyle())
         .padding(.horizontal, 20)
         .accessibilityLabel(
-            "\(featuredLabel), \(mode.rawValue), high score \(scoreText(for: mode))"
+            isFeatured
+                ? "\(featuredLabel), \(mode.rawValue), high score \(scoreText(for: mode))"
+                : "\(mode.rawValue), high score \(scoreText(for: mode))"
         )
         .accessibilityHint("Double tap to play")
     }
@@ -568,226 +578,6 @@ struct HomeTab: View {
             }
         }
         .frame(width: 1)
-    }
-
-    // MARK: - Remaining games
-
-    private var otherGames: some View {
-        VStack(spacing: 20) {
-            if featuredMode != .tapFrenzy {
-                gameTicket(
-                    mode: .tapFrenzy,
-                    tilt: -2.5
-                )
-            }
-
-            if featuredMode != .lightItUp {
-                gameTicket(
-                    mode: .lightItUp,
-                    tilt: 2
-                )
-            }
-
-            if featuredMode != .quizRush {
-                gameTicket(
-                    mode: .quizRush,
-                    tilt: -1.5
-                )
-            }
-        }
-        .padding(.horizontal, 20)
-    }
-
-    private func gameTicket(
-        mode: GameMode,
-        tilt: Double
-    ) -> some View {
-        NavigationLink(destination: destination(for: mode)) {
-            HStack(spacing: 0) {
-                ticketIconPanel(mode: mode)
-
-                ticketPerforation
-                    .padding(.horizontal, 10)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(mode.rawValue.uppercased())
-                        .font(
-                            .system(
-                                size: 16,
-                                weight: .black,
-                                design: .rounded
-                            )
-                        )
-                        .foregroundColor(AppTheme.textPrimary)
-
-                    Text(subtitle(for: mode))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppTheme.textSecondary)
-                        .lineLimit(2)
-
-                    Spacer(minLength: 5)
-
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("HIGH SCORE")
-                                .font(
-                                    .system(
-                                        size: 8,
-                                        weight: .black,
-                                        design: .monospaced
-                                    )
-                                )
-                                .tracking(1.2)
-                                .foregroundColor(AppTheme.textMuted)
-
-                            Text(scoreText(for: mode))
-                                .font(
-                                    .system(
-                                        size: 19,
-                                        weight: .black,
-                                        design: .monospaced
-                                    )
-                                )
-                                .foregroundColor(mode.themeColor)
-                        }
-
-                        Spacer()
-
-                        HStack(spacing: 6) {
-                            Text("PLAY")
-                            Image(systemName: "arrow.right")
-                        }
-                        .font(
-                            .system(
-                                size: 9,
-                                weight: .black,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(mode.themeColor)
-                        .clipShape(Capsule())
-                        .shadow(
-                            color: mode.themeColor.opacity(0.45),
-                            radius: 7,
-                            y: 3
-                        )
-                    }
-                }
-                .padding(.vertical, 14)
-                .padding(.trailing, 15)
-            }
-            .frame(height: 112)
-            .background {
-                ZStack {
-                    RoundedRectangle(
-                        cornerRadius: 22,
-                        style: .continuous
-                    )
-                    .fill(.ultraThinMaterial)
-
-                    LinearGradient(
-                        colors: [
-                            mode.themeColor.opacity(0.11),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .clipShape(
-                        RoundedRectangle(
-                            cornerRadius: 22,
-                            style: .continuous
-                        )
-                    )
-                }
-            }
-            .environment(\.colorScheme, .dark)
-            .clipShape(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(
-                        mode.themeColor.opacity(0.45),
-                        lineWidth: 1.3
-                    )
-            }
-            .overlay(alignment: .leading) {
-                Circle()
-                    .fill(AppTheme.background)
-                    .frame(width: 15, height: 15)
-                    .offset(x: -7.5)
-            }
-            .overlay(alignment: .trailing) {
-                Circle()
-                    .fill(AppTheme.background)
-                    .frame(width: 15, height: 15)
-                    .offset(x: 7.5)
-            }
-            .shadow(
-                color: mode.themeColor.opacity(0.22),
-                radius: 15,
-                y: 8
-            )
-            .rotationEffect(.degrees(tilt))
-        }
-        .buttonStyle(PressableStyle())
-    }
-
-    private func ticketIconPanel(mode: GameMode) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    mode.themeColor.opacity(0.8),
-                    mode.themeColor.opacity(0.25)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Circle()
-                .stroke(Color.white.opacity(0.18), lineWidth: 9)
-                .frame(width: 75, height: 75)
-                .offset(x: -25, y: -38)
-
-            VStack(spacing: 8) {
-                Image(systemName: mode.icon)
-                    .font(.system(size: 25, weight: .black))
-                    .foregroundColor(.white)
-                    .shadow(color: mode.themeColor, radius: 8)
-
-                Text("ARCADE")
-                    .font(
-                        .system(
-                            size: 7,
-                            weight: .black,
-                            design: .monospaced
-                        )
-                    )
-                    .tracking(1.5)
-                    .foregroundColor(.white.opacity(0.75))
-            }
-        }
-        .frame(width: 82)
-        .frame(maxHeight: .infinity)
-        .clipShape(
-            RoundedRectangle(cornerRadius: 17, style: .continuous)
-        )
-        .padding(6)
-    }
-
-    private var ticketPerforation: some View {
-        VStack(spacing: 4) {
-            ForEach(0..<9, id: \.self) { _ in
-                Circle()
-                    .fill(AppTheme.cardBorder)
-                    .frame(width: 3, height: 3)
-            }
-        }
-        .frame(width: 3)
     }
 
     // MARK: - Game data
