@@ -10,23 +10,26 @@ import Speech
 import AVFoundation
 import Combine
 
+@available(iOS 26.0, *)
+@MainActor
 final class VoiceCommandService: NSObject, ObservableObject {
 
     @Published private(set) var isListening = false
     @Published private(set) var liveTranscript = ""
+    @Published private(set) var isPreparing = false
 
     private let audioEngine = AVAudioEngine()
 
-    private let speechRecognizer =
-        SFSpeechRecognizer(
-            locale: Locale(identifier: "en-US")
-        )
+    private var analyzer: SpeechAnalyzer?
+    private var transcriber: SpeechTranscriber?
 
-    private var recognitionRequest:
-        SFSpeechAudioBufferRecognitionRequest?
+    private var inputContinuation:
+        AsyncStream<AnalyzerInput>.Continuation?
 
-    private var recognitionTask:
-        SFSpeechRecognitionTask?
+    private var resultsTask: Task<Void, Never>?
+    private var startupTask: Task<Void, Never>?
+
+    private var audioConverter: SpeechAudioConverter?
 
     private var initialSpeechTimer: Timer?
     private var silenceTimer: Timer?
@@ -39,13 +42,8 @@ final class VoiceCommandService: NSObject, ObservableObject {
     private var didFinish = true
     private var activeSessionID: UUID?
 
-    // Time allowed before the user starts talking.
     private let initialSpeechTimeout: TimeInterval = 5.0
-
-    // Silence allowed after speech begins.
     private let silenceTimeout: TimeInterval = 2.0
-
-    // Absolute maximum listening time.
     private let maximumListenDuration: TimeInterval = 12.0
 
     // MARK: - Permissions
@@ -74,18 +72,13 @@ final class VoiceCommandService: NSObject, ObservableObject {
         AVAudioApplication.shared.recordPermission == .granted
     }
 
-    // MARK: - Listening
+    // MARK: - Public methods
 
     func listenOnce(
         completion: @escaping (String?) -> Void
     ) {
-        /*
-         Do not call completion(nil) when another listening request is
-         already starting. Doing that would cause QuizRushView to say
-         "Sorry" even though the first request is still listening.
-         */
         guard !isStarting, !isListening else {
-            print("⚠️ Microphone is already starting or listening.")
+            print("⚠️ Speech recognition is already active.")
             return
         }
 
@@ -95,136 +88,388 @@ final class VoiceCommandService: NSObject, ObservableObject {
             return
         }
 
-        guard
-            let recognizer = speechRecognizer,
-            recognizer.isAvailable
-        else {
-            print("❌ Speech recognizer is unavailable.")
-            completion(nil)
-            return
-        }
-
-        /*
-         Remove anything left by an older listening session before marking
-         this new session as active.
-         */
-        invalidateCurrentSession()
-        tearDownAudio()
-
-        isStarting = true
-        didFinish = false
-        liveTranscript = ""
-        self.completion = completion
+        cleanUpCurrentSession()
 
         let sessionID = UUID()
+
         activeSessionID = sessionID
+        self.completion = completion
 
-        let audioSession = AVAudioSession.sharedInstance()
+        didFinish = false
+        isStarting = true
+        isPreparing = true
+        isListening = false
+        liveTranscript = ""
 
+        startupTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.startSpeechAnalyzer(
+                sessionID: sessionID
+            )
+        }
+    }
+
+    func stopListening() {
+        startupTask?.cancel()
+        startupTask = nil
+
+        guard let sessionID = activeSessionID else {
+            cleanUpCurrentSession()
+            return
+        }
+
+        finish(
+            with: nil,
+            sessionID: sessionID,
+            notifyCaller: false
+        )
+    }
+
+    // MARK: - SpeechAnalyzer setup
+
+    private func startSpeechAnalyzer(
+        sessionID: UUID
+    ) async {
         do {
-            try audioSession.setCategory(
-                .playAndRecord,
-                mode: .measurement,
-                options: [
-                    .defaultToSpeaker,
-                    .allowBluetooth
-                ]
+            guard
+                activeSessionID == sessionID,
+                !Task.isCancelled
+            else {
+                return
+            }
+
+            guard let supportedLocale =
+                    await SpeechTranscriber.supportedLocale(
+                        equivalentTo: Locale(
+                            identifier: "en-US"
+                        )
+                    )
+            else {
+                failToStart(
+                    sessionID: sessionID,
+                    message: "SpeechAnalyzer does not support en-US."
+                )
+                return
+            }
+
+            print(
+                "✅ Supported locale:",
+                supportedLocale.identifier
             )
 
-            try audioSession.setActive(
-                true,
-                options: .notifyOthersOnDeactivation
+            /*
+             Reserve the locale before requesting the asset download.
+             Without this, AssetInventory can report that the app isn't
+             subscribed to transcription.en.
+             */
+            let wasReserved =
+                try await AssetInventory.reserve(
+                    locale: supportedLocale
+                )
+
+            if wasReserved {
+                print(
+                    "✅ Reserved speech locale:",
+                    supportedLocale.identifier
+                )
+            } else {
+                print(
+                    "✅ Speech locale was already reserved:",
+                    supportedLocale.identifier
+                )
+            }
+
+            guard
+                activeSessionID == sessionID,
+                !Task.isCancelled
+            else {
+                return
+            }
+
+            let transcriber = SpeechTranscriber(
+                locale: supportedLocale,
+                transcriptionOptions: [],
+                reportingOptions: [.volatileResults],
+                attributeOptions: []
             )
-        } catch {
-            failToStart(
-                sessionID: sessionID,
-                message: "Audio session error: \(error.localizedDescription)"
-            )
-            return
-        }
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.taskHint = .confirmation
+            print("⏳ Checking SpeechAnalyzer assets...")
 
-        /*
-         Do not force requiresOnDeviceRecognition. Allow iOS to select
-         whichever recognition method is currently available.
-         */
-        recognitionRequest = request
+            let assetStatus =
+                await AssetInventory.status(
+                    forModules: [transcriber]
+                )
 
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
+            print("Speech asset status:", assetStatus)
 
-        guard
-            format.sampleRate > 0,
-            format.channelCount > 0
-        else {
-            failToStart(
-                sessionID: sessionID,
-                message: "The microphone returned an invalid audio format."
-            )
-            return
-        }
+            switch assetStatus {
+            case .installed:
+                print(
+                    "✅ SpeechAnalyzer assets already installed."
+                )
 
-        /*
-         There must only ever be one tap on bus 0.
-         */
-        if tapInstalled {
-            inputNode.removeTap(onBus: 0)
-            tapInstalled = false
-        }
+            case .supported, .downloading:
+                if let installationRequest =
+                    try await AssetInventory
+                        .assetInstallationRequest(
+                            supporting: [transcriber]
+                        ) {
+                    print(
+                        "⬇️ Downloading SpeechAnalyzer assets..."
+                    )
 
-        inputNode.installTap(
-            onBus: 0,
-            bufferSize: 1024,
-            format: format
-        ) { [weak request] buffer, _ in
-            request?.append(buffer)
-        }
+                    try await installationRequest
+                        .downloadAndInstall()
 
-        tapInstalled = true
-
-        /*
-         Start the recognition task before starting the audio engine so the
-         first microphone buffers are not missed.
-         */
-        recognitionTask = recognizer.recognitionTask(
-            with: request
-        ) { [weak self] result, error in
-            DispatchQueue.main.async {
-                guard
-                    let self,
-                    self.activeSessionID == sessionID,
-                    !self.didFinish
-                else {
-                    return
+                    print(
+                        "✅ SpeechAnalyzer assets installed."
+                    )
                 }
 
-                if let result {
+            case .unsupported:
+                failToStart(
+                    sessionID: sessionID,
+                    message: "English SpeechAnalyzer assets are unsupported."
+                )
+                return
+
+            @unknown default:
+                failToStart(
+                    sessionID: sessionID,
+                    message: "Unknown SpeechAnalyzer asset status."
+                )
+                return
+            }
+
+            guard
+                activeSessionID == sessionID,
+                !Task.isCancelled
+            else {
+                return
+            }
+
+            guard let analyzerFormat =
+                    await SpeechAnalyzer
+                        .bestAvailableAudioFormat(
+                            compatibleWith: [transcriber]
+                        )
+            else {
+                failToStart(
+                    sessionID: sessionID,
+                    message: "No compatible SpeechAnalyzer audio format."
+                )
+                return
+            }
+
+            print(
+                "✅ Analyzer format:",
+                analyzerFormat.sampleRate,
+                "Hz,",
+                analyzerFormat.channelCount,
+                "channel(s)"
+            )
+
+            let analyzer = SpeechAnalyzer(
+                modules: [transcriber]
+            )
+
+            let stream =
+                AsyncStream.makeStream(
+                    of: AnalyzerInput.self
+                )
+
+            let inputSequence = stream.stream
+            let inputContinuation = stream.continuation
+
+            self.transcriber = transcriber
+            self.analyzer = analyzer
+            self.inputContinuation = inputContinuation
+
+            startReadingResults(
+                from: transcriber,
+                sessionID: sessionID
+            )
+
+            try configureAudioSession()
+
+            let inputNode = audioEngine.inputNode
+
+            let microphoneFormat =
+                inputNode.outputFormat(forBus: 0)
+
+            guard
+                microphoneFormat.sampleRate > 0,
+                microphoneFormat.channelCount > 0
+            else {
+                failToStart(
+                    sessionID: sessionID,
+                    message: "The microphone returned an invalid audio format."
+                )
+                return
+            }
+
+            let converter = try SpeechAudioConverter(
+                inputFormat: microphoneFormat,
+                outputFormat: analyzerFormat
+            )
+
+            audioConverter = converter
+
+            if tapInstalled {
+                inputNode.removeTap(onBus: 0)
+                tapInstalled = false
+            }
+
+            /*
+             Install exactly one microphone tap.
+             AsyncStream.Continuation is a struct, so it is captured strongly.
+             */
+            inputNode.installTap(
+                onBus: 0,
+                bufferSize: 1024,
+                format: microphoneFormat
+            ) { buffer, _ in
+                do {
+                    let convertedBuffer =
+                        try converter.convert(buffer)
+
+                    inputContinuation.yield(
+                        AnalyzerInput(
+                            buffer: convertedBuffer
+                        )
+                    )
+                } catch {
+                    print(
+                        "❌ Audio conversion failed:",
+                        error.localizedDescription
+                    )
+                }
+            }
+
+            tapInstalled = true
+
+            /*
+             Initialize the analyzer before starting the audio engine.
+             */
+            try await analyzer.start(
+                inputSequence: inputSequence
+            )
+
+            guard
+                activeSessionID == sessionID,
+                !Task.isCancelled
+            else {
+                await analyzer.cancelAndFinishNow()
+                return
+            }
+
+            audioEngine.prepare()
+            try audioEngine.start()
+
+            guard activeSessionID == sessionID else {
+                await analyzer.cancelAndFinishNow()
+                return
+            }
+
+            isStarting = false
+            isPreparing = false
+            isListening = true
+
+            print("🎙️ SpeechAnalyzer is listening.")
+
+            armInitialSpeechTimer(
+                sessionID: sessionID
+            )
+
+            armMaximumDurationTimer(
+                sessionID: sessionID
+            )
+        } catch {
+            let nsError = error as NSError
+
+            print("❌ SpeechAnalyzer startup error")
+            print("Domain:", nsError.domain)
+            print("Code:", nsError.code)
+            print(
+                "Description:",
+                nsError.localizedDescription
+            )
+            print("Details:", nsError.userInfo)
+
+            failToStart(
+                sessionID: sessionID,
+                message: nsError.localizedDescription
+            )
+        }
+    }
+
+    private func configureAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [
+                .defaultToSpeaker,
+                .allowBluetooth
+            ]
+        )
+
+        try session.setActive(
+            true,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+
+    // MARK: - Results
+
+    private func startReadingResults(
+        from transcriber: SpeechTranscriber,
+        sessionID: UUID
+    ) {
+        resultsTask?.cancel()
+
+        resultsTask = Task { [weak self] in
+            do {
+                for try await result in transcriber.results {
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    guard let self else {
+                        return
+                    }
+
+                    guard
+                        self.activeSessionID == sessionID,
+                        !self.didFinish
+                    else {
+                        return
+                    }
+
                     let transcript =
-                        result.bestTranscription.formattedString
+                        String(result.text.characters)
+                            .trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+
+                    guard !transcript.isEmpty else {
+                        continue
+                    }
 
                     self.liveTranscript = transcript
 
-                    print("🎤 Heard: \(transcript)")
+                    print("🎤 Heard:", transcript)
 
-                    let trimmed =
-                        transcript.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        )
+                    self.initialSpeechTimer?.invalidate()
+                    self.initialSpeechTimer = nil
 
-                    if !trimmed.isEmpty {
-                        /*
-                         Speech has started. Stop the initial waiting timer
-                         and use the post-speech silence timer instead.
-                         */
-                        self.initialSpeechTimer?.invalidate()
-                        self.initialSpeechTimer = nil
-                        self.armSilenceTimer(
-                            sessionID: sessionID
-                        )
-                    }
+                    self.armSilenceTimer(
+                        sessionID: sessionID
+                    )
 
                     if result.isFinal {
                         self.finish(
@@ -234,70 +479,36 @@ final class VoiceCommandService: NSObject, ObservableObject {
                         return
                     }
                 }
-
-                if let error {
-                    let nsError = error as NSError
-
-                    print("❌ Speech-recognition error")
-                    print("Domain: \(nsError.domain)")
-                    print("Code: \(nsError.code)")
-                    print("Description: \(nsError.localizedDescription)")
-                    print("Details: \(nsError.userInfo)")
-
-                    self.finish(
-                        with: self.liveTranscript.isEmpty
-                            ? nil
-                            : self.liveTranscript,
-                        sessionID: sessionID
-                    )
+            } catch {
+                guard let self else {
+                    return
                 }
+
+                guard
+                    self.activeSessionID == sessionID,
+                    !self.didFinish
+                else {
+                    return
+                }
+
+                let nsError = error as NSError
+
+                print("❌ SpeechAnalyzer result error")
+                print("Domain:", nsError.domain)
+                print("Code:", nsError.code)
+                print(
+                    "Description:",
+                    nsError.localizedDescription
+                )
+
+                self.finish(
+                    with: self.liveTranscript.isEmpty
+                        ? nil
+                        : self.liveTranscript,
+                    sessionID: sessionID
+                )
             }
         }
-
-        audioEngine.prepare()
-
-        do {
-            try audioEngine.start()
-        } catch {
-            failToStart(
-                sessionID: sessionID,
-                message: "Audio engine error: \(error.localizedDescription)"
-            )
-            return
-        }
-
-        guard activeSessionID == sessionID else {
-            tearDownAudio()
-            return
-        }
-
-        isStarting = false
-        isListening = true
-
-        print("🎙️ Microphone started. Waiting for speech.")
-
-        armInitialSpeechTimer(
-            sessionID: sessionID
-        )
-
-        armMaximumDurationTimer(
-            sessionID: sessionID
-        )
-    }
-
-    func stopListening() {
-        guard let sessionID = activeSessionID else {
-            tearDownAudio()
-            isStarting = false
-            isListening = false
-            return
-        }
-
-        finish(
-            with: nil,
-            sessionID: sessionID,
-            notifyCaller: false
-        )
     }
 
     // MARK: - Timers
@@ -311,8 +522,11 @@ final class VoiceCommandService: NSObject, ObservableObject {
             withTimeInterval: initialSpeechTimeout,
             repeats: false
         ) { [weak self] _ in
+            guard let self else {
+                return
+            }
+
             guard
-                let self,
                 self.activeSessionID == sessionID,
                 !self.didFinish
             else {
@@ -339,15 +553,21 @@ final class VoiceCommandService: NSObject, ObservableObject {
             withTimeInterval: silenceTimeout,
             repeats: false
         ) { [weak self] _ in
+            guard let self else {
+                return
+            }
+
             guard
-                let self,
                 self.activeSessionID == sessionID,
                 !self.didFinish
             else {
                 return
             }
 
-            print("✅ Speech finished: \(self.liveTranscript)")
+            print(
+                "✅ Speech finished:",
+                self.liveTranscript
+            )
 
             self.finish(
                 with: self.liveTranscript,
@@ -362,8 +582,11 @@ final class VoiceCommandService: NSObject, ObservableObject {
         maximumDurationWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
+            }
+
             guard
-                let self,
                 self.activeSessionID == sessionID,
                 !self.didFinish
             else {
@@ -403,12 +626,6 @@ final class VoiceCommandService: NSObject, ObservableObject {
         }
 
         didFinish = true
-
-        /*
-         Invalidate the session before cancelling recognition. Cancellation
-         can invoke the recognition callback again, but that callback will
-         now see that its session is no longer active.
-         */
         activeSessionID = nil
 
         initialSpeechTimer?.invalidate()
@@ -420,12 +637,28 @@ final class VoiceCommandService: NSObject, ObservableObject {
         maximumDurationWorkItem?.cancel()
         maximumDurationWorkItem = nil
 
+        startupTask?.cancel()
+        startupTask = nil
+
         let handler = completion
         completion = nil
 
-        tearDownAudio()
+        stopAudioEngine()
+
+        inputContinuation?.finish()
+        inputContinuation = nil
+
+        resultsTask?.cancel()
+        resultsTask = nil
+
+        cancelAnalyzer()
+
+        analyzer = nil
+        transcriber = nil
+        audioConverter = nil
 
         isStarting = false
+        isPreparing = false
         isListening = false
 
         guard notifyCaller else {
@@ -439,10 +672,10 @@ final class VoiceCommandService: NSObject, ObservableObject {
             .lowercased()
 
         if let trimmed, !trimmed.isEmpty {
-            print("✅ Final transcript: \(trimmed)")
+            print("✅ Final transcript:", trimmed)
             handler?(trimmed)
         } else {
-            print("⚠️ No transcript was received.")
+            print("⚠️ No transcript received.")
             handler?(nil)
         }
     }
@@ -471,12 +704,28 @@ final class VoiceCommandService: NSObject, ObservableObject {
         maximumDurationWorkItem?.cancel()
         maximumDurationWorkItem = nil
 
+        startupTask?.cancel()
+        startupTask = nil
+
         let handler = completion
         completion = nil
 
-        tearDownAudio()
+        stopAudioEngine()
+
+        inputContinuation?.finish()
+        inputContinuation = nil
+
+        resultsTask?.cancel()
+        resultsTask = nil
+
+        cancelAnalyzer()
+
+        analyzer = nil
+        transcriber = nil
+        audioConverter = nil
 
         isStarting = false
+        isPreparing = false
         isListening = false
 
         handler?(nil)
@@ -484,9 +733,12 @@ final class VoiceCommandService: NSObject, ObservableObject {
 
     // MARK: - Cleanup
 
-    private func invalidateCurrentSession() {
+    private func cleanUpCurrentSession() {
         activeSessionID = nil
         didFinish = true
+
+        startupTask?.cancel()
+        startupTask = nil
 
         initialSpeechTimer?.invalidate()
         initialSpeechTimer = nil
@@ -497,16 +749,37 @@ final class VoiceCommandService: NSObject, ObservableObject {
         maximumDurationWorkItem?.cancel()
         maximumDurationWorkItem = nil
 
+        inputContinuation?.finish()
+        inputContinuation = nil
+
+        resultsTask?.cancel()
+        resultsTask = nil
+
+        cancelAnalyzer()
+
+        analyzer = nil
+        transcriber = nil
+        audioConverter = nil
         completion = nil
+
+        stopAudioEngine()
+
+        isStarting = false
+        isPreparing = false
+        isListening = false
     }
 
-    private func tearDownAudio() {
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
+    private func cancelAnalyzer() {
+        guard let analyzer else {
+            return
+        }
 
-        recognitionTask?.cancel()
-        recognitionTask = nil
+        Task {
+            await analyzer.cancelAndFinishNow()
+        }
+    }
 
+    private func stopAudioEngine() {
         if audioEngine.isRunning {
             audioEngine.stop()
         }
@@ -517,5 +790,118 @@ final class VoiceCommandService: NSObject, ObservableObject {
         }
 
         audioEngine.reset()
+    }
+}
+
+// MARK: - Audio converter
+
+private final class SpeechAudioConverter:
+    @unchecked Sendable {
+
+    private let converter: AVAudioConverter
+    private let outputFormat: AVAudioFormat
+    private let lock = NSLock()
+
+    init(
+        inputFormat: AVAudioFormat,
+        outputFormat: AVAudioFormat
+    ) throws {
+        guard let converter = AVAudioConverter(
+            from: inputFormat,
+            to: outputFormat
+        ) else {
+            throw SpeechAnalyzerServiceError
+                .converterCreationFailed
+        }
+
+        converter.primeMethod = .none
+
+        self.converter = converter
+        self.outputFormat = outputFormat
+    }
+
+    func convert(
+        _ inputBuffer: AVAudioPCMBuffer
+    ) throws -> AVAudioPCMBuffer {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        if inputBuffer.format == outputFormat {
+            return inputBuffer
+        }
+
+        let ratio =
+            outputFormat.sampleRate /
+            inputBuffer.format.sampleRate
+
+        let expectedFrames =
+            Double(inputBuffer.frameLength) * ratio
+
+        let outputCapacity =
+            AVAudioFrameCount(
+                expectedFrames.rounded(.up)
+            ) + 1024
+
+        guard let outputBuffer = AVAudioPCMBuffer(
+            pcmFormat: outputFormat,
+            frameCapacity: outputCapacity
+        ) else {
+            throw SpeechAnalyzerServiceError
+                .outputBufferCreationFailed
+        }
+
+        var suppliedInput = false
+        var conversionError: NSError?
+
+        let status = converter.convert(
+            to: outputBuffer,
+            error: &conversionError
+        ) { _, inputStatus in
+            if suppliedInput {
+                inputStatus.pointee = .noDataNow
+                return nil
+            }
+
+            suppliedInput = true
+            inputStatus.pointee = .haveData
+
+            return inputBuffer
+        }
+
+        if let conversionError {
+            throw conversionError
+        }
+
+        guard status != .error else {
+            throw SpeechAnalyzerServiceError
+                .conversionFailed
+        }
+
+        return outputBuffer
+    }
+}
+
+// MARK: - Errors
+
+private enum SpeechAnalyzerServiceError:
+    LocalizedError {
+
+    case converterCreationFailed
+    case outputBufferCreationFailed
+    case conversionFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .converterCreationFailed:
+            return "Unable to create the audio converter."
+
+        case .outputBufferCreationFailed:
+            return "Unable to create the converted audio buffer."
+
+        case .conversionFailed:
+            return "The microphone audio could not be converted."
+        }
     }
 }
