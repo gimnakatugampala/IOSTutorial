@@ -34,10 +34,11 @@ struct MainTabView: View {
             }
             .tag(AppTab.settings)
         }
+        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             customTabBar
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+   
     }
 
     // MARK: - Custom tab bar

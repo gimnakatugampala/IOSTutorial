@@ -70,8 +70,7 @@ struct MapTab: View {
             .onMapCameraChange(frequency: .continuous) { context in
                 liveRegion = context.region
             }
-            .ignoresSafeArea(edges: .bottom)
-            // Subtle brand-colored wash over the tiles so the map's blues/greens
+            .ignoresSafeArea()            // Subtle brand-colored wash over the tiles so the map's blues/greens
             // pick up the same tint as the rest of the app rather than looking
             // like a foreign surface dropped into the UI.
             .overlay(
@@ -134,7 +133,6 @@ struct MapTab: View {
             dateRangeMenu
         }
         .padding(.horizontal)
-        .padding(.top, 8)
     }
 
     func modeChip(_ option: MapFilterOption) -> some View {
