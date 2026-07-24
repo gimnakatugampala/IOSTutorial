@@ -90,8 +90,22 @@ final class QuizVoiceService: NSObject, ObservableObject {
     /// speaker — AVSpeechSynthesizer doesn't error, it just goes quiet.
     private func configureAudioSessionForPlayback() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
-        try? session.setActive(true)
+
+        do {
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [
+                    .duckOthers,
+                    .defaultToSpeaker,
+                    .allowBluetooth
+                ]
+            )
+
+            try session.setActive(true)
+        } catch {
+            print("Speech playback audio-session error:", error)
+        }
     }
 }
 

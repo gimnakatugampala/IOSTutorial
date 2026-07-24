@@ -6,7 +6,12 @@ struct QuizRushView: View {
     /// control is meant to be a zero-touch flow from the moment the player
     /// says "Quiz Rush," so making them then tap a genre grid would defeat it.
     var autoStart: Bool = false
-
+    
+    init(autoStart: Bool = false) {
+           self.autoStart = autoStart
+       }
+    
+    private var initialSpeechTimer: Timer?
     @StateObject private var viewModel = QuizRushViewModel()
     @StateObject private var voice = QuizVoiceService()
     @StateObject private var voiceCommand = VoiceCommandService()
@@ -19,8 +24,9 @@ struct QuizRushView: View {
 
     @AppStorage("quizRushVoiceEnabled") private var voiceEnabled = false
     @AppStorage("quizRushVoiceControlEnabled") private var voiceControlEnabled = false
-
-    /// Counts consecutive failed voice-answer attempts on the current
+    
+       
+    ///// Counts consecutive failed voice-answer attempts on the current
     /// question, so a noisy room can't leave the player stuck in an
     /// infinite "didn't catch that" loop — after a couple of misses we back
     /// off and let them answer by tapping instead.
@@ -404,29 +410,57 @@ struct QuizRushView: View {
     /// word (treated as a 1-based index), then falls back to fuzzy text
     /// matching against the actual answer content so saying the answer
     /// itself ("paris") works just as well as saying its option number.
-    private func matchSpokenAnswer(_ transcript: String, options: [String]) -> String? {
-        let cleaned = transcript.lowercased()
+    private func matchSpokenAnswer(
+        _ transcript: String,
+        options: [String]
+    ) -> String? {
+        let cleaned = transcript
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let words = Set(
+            cleaned
+                .split { !$0.isLetter && !$0.isNumber }
+                .map(String.init)
+        )
 
         let numberWords: [String: Int] = [
-            "one": 1, "two": 2, "three": 3, "four": 4, "to": 2, "for": 4
+            "one": 1,
+            "two": 2,
+            "three": 3,
+            "four": 4,
+            "to": 2,
+            "too": 2,
+            "for": 4
         ]
-        for (word, number) in numberWords where cleaned.contains(word) {
-            if number - 1 < options.count { return options[number - 1] }
+
+        for (word, number) in numberWords {
+            if words.contains(word),
+               number >= 1,
+               number <= options.count {
+                return options[number - 1]
+            }
         }
-        // A short transcript that's basically just a digit — avoids
-        // mis-firing on a spoken answer that happens to contain a number,
-        // e.g. "nineteen sixty nine."
-        if cleaned.count <= 12, let digit = cleaned.compactMap({ $0.wholeNumberValue }).first,
-           digit >= 1, digit - 1 < options.count {
+
+        if cleaned.count <= 12,
+           let digit = cleaned
+                .compactMap({ $0.wholeNumberValue })
+                .first,
+           digit >= 1,
+           digit <= options.count {
             return options[digit - 1]
         }
 
         for option in options {
             let optionLower = option.lowercased()
-            if cleaned == optionLower || cleaned.contains(optionLower) || optionLower.contains(cleaned) {
+
+            if cleaned == optionLower ||
+                cleaned.contains(optionLower) ||
+                optionLower.contains(cleaned) {
                 return option
             }
         }
+
         return nil
     }
 }

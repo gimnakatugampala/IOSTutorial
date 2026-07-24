@@ -20,6 +20,8 @@ import SwiftUI
 
 struct HomeTab: View {
     @EnvironmentObject var statsVM: StatsVM
+    
+
 
     // Entrance + ambient motion state
     @State private var appeared = false
