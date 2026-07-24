@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-// MARK: - Open Trivia DB Categories
+// MARK: - Open Trivia DB Categories (Genres)
 // IDs match opentdb.com/api_category.php — passed straight into the ?category= param.
 enum QuizCategory: Int, CaseIterable, Identifiable {
     case any = 0
@@ -65,15 +65,15 @@ enum QuizCategory: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// Pulled from AppTheme.genrePalette by position, not hand-picked per case —
-    /// keeps every color in the app coming from one shared source.
+    // Pulled from AppTheme.genrePalette by position, not hand-picked per case —
+    // keeps every color in the app coming from one shared source.
     var color: Color {
         if self == .any { return AppTheme.brand }
         let index = QuizCategory.allCases.firstIndex(of: self) ?? 0
         return AppTheme.genreColor(at: index)
     }
 
-    /// Query param appended to the OpenTDB URL, empty for "Any Genre".
+    // Query param appended to the OpenTDB URL, empty for "Any Genre".
     var queryParam: String {
         self == .any ? "" : "&category=\(rawValue)"
     }

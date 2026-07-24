@@ -117,7 +117,7 @@ class StatsVM: ObservableObject {
         return streak
     }
     
-    // Whichever mode currently holds the single highest score, if any.
+    // Whichever mode currently holds the single highest score, if any. (Out of all the games)
     var topMode: GameMode? {
         let ranked = GameMode.allCases.map { ($0, highestScore(for: $0)) }
         guard let best = ranked.max(by: { $0.1 < $1.1 }), best.1 > 0 else { return nil }
