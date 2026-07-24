@@ -236,15 +236,14 @@ final class VoiceCommandService: NSObject, ObservableObject {
                 }
 
                 if let error {
-                    print(
-                        "❌ Speech-recognition error:",
-                        error.localizedDescription
-                    )
+                    let nsError = error as NSError
 
-                    /*
-                     If partial speech was already received, use it even if
-                     the recognizer subsequently reports an error.
-                     */
+                    print("❌ Speech-recognition error")
+                    print("Domain: \(nsError.domain)")
+                    print("Code: \(nsError.code)")
+                    print("Description: \(nsError.localizedDescription)")
+                    print("Details: \(nsError.userInfo)")
+
                     self.finish(
                         with: self.liveTranscript.isEmpty
                             ? nil
