@@ -125,34 +125,41 @@ struct HomeTab: View {
 
     private var allGamesSection: some View {
         VStack(spacing: 20) {
-            gameCard(for: featuredMode)
-
-            ForEach(GameMode.allCases.filter { $0 != featuredMode }) { mode in
+            ForEach(GameMode.allCases) { mode in
                 gameCard(for: mode)
             }
         }
     }
 
-    /// Full-width hero-style card, shared by every game mode. The featured
-    /// mode additionally gets the "FEATURED GAME" / "MOST PLAYED" badge in
-    /// the top-left corner; the other modes show the same card minus that
-    /// badge so all three read as one consistent family.
+    /// Full-width hero-style card, shared by every game mode so all three
+    /// read as one considered family rather than "1 hero + 2 leftovers."
+    /// Each card carries a meta chip (the featured flag, or that mode's
+    /// play count), a glowing pulsing icon medallion, a "PLAY" CTA, and a
+    /// relative-score bar along the bottom that ranks this mode's best
+    /// against the strongest of the three at a glance.
     private func gameCard(for mode: GameMode) -> some View {
-        let isFeatured = mode == featuredMode
+        let badge = cardBadge(for: mode)
 
         return NavigationLink(destination: destination(for: mode)) {
             ZStack(alignment: .bottomLeading) {
                 featuredBackground(for: mode)
+                    .overlay(alignment: .top) {
+                        // Soft diagonal glass sheen — same highlight
+                        // language as the control-deck chrome at the
+                        // bottom of the app, so the cards feel of a piece
+                        // with the rest of the UI rather than a flat fill.
+                        LinearGradient(
+                            colors: [.white.opacity(0.18), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 64)
+                        .allowsHitTesting(false)
+                    }
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        if isFeatured {
-                            Label(
-                                featuredLabel,
-                                systemImage: statsVM.topMode == nil
-                                    ? "sparkles"
-                                    : "flame.fill"
-                            )
+                        Label(badge.text, systemImage: badge.icon)
                             .font(
                                 .system(
                                     size: 9,
@@ -160,24 +167,46 @@ struct HomeTab: View {
                                     design: .monospaced
                                 )
                             )
-                            .tracking(1.6)
-                            .foregroundColor(.white.opacity(0.8))
+                            .tracking(1.4)
+                            .foregroundColor(.white.opacity(0.85))
+                            .lineLimit(1)
+
+                        Spacer(minLength: 8)
+
+                        HStack(spacing: 5) {
+                            Text("PLAY")
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 10, weight: .black))
                         }
-
-                        Spacer()
-
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 13, weight: .black))
-                            .foregroundColor(.white)
-                            .frame(width: 34, height: 34)
-                            .background(.white.opacity(0.14))
-                            .clipShape(Circle())
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .tracking(0.6)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.16))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
+                        )
                     }
 
                     Spacer()
 
                     HStack(alignment: .bottom, spacing: 14) {
                         ZStack {
+                            // Ambient glow behind the medallion, pulsing in
+                            // sync with the page's backdrop glow so the
+                            // whole screen breathes together.
+                            Circle()
+                                .fill(mode.themeColor.opacity(0.55))
+                                .frame(width: 74, height: 74)
+                                .blur(radius: 16)
+                                .scaleEffect(glowPulse ? 1.12 : 0.88)
+                                .animation(
+                                    .easeInOut(duration: 2.4).repeatForever(autoreverses: true),
+                                    value: glowPulse
+                                )
+
                             Circle()
                                 .fill(.white.opacity(0.14))
                                 .frame(width: 62, height: 62)
@@ -241,11 +270,28 @@ struct HomeTab: View {
                                 .foregroundColor(.white)
                         }
                     }
+
+                    // Relative high-score bar — fills proportionally to how
+                    // this mode's best stacks up against the strongest of
+                    // the three, so the cards visibly rank themselves
+                    // instead of showing numbers in isolation.
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.14))
+                            Capsule()
+                                .fill(Color.white.opacity(0.9))
+                                .frame(width: proxy.size.width * scoreFraction(for: mode))
+                        }
+                    }
+                    .frame(height: 4)
+                    .padding(.top, 12)
                 }
-                .padding(18)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 16)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 190)
+            .frame(height: 198)
             .clipShape(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
             )
@@ -274,9 +320,7 @@ struct HomeTab: View {
         .buttonStyle(PressableStyle())
         .padding(.horizontal, 20)
         .accessibilityLabel(
-            isFeatured
-                ? "\(featuredLabel), \(mode.rawValue), high score \(scoreText(for: mode))"
-                : "\(mode.rawValue), high score \(scoreText(for: mode))"
+            "\(badge.text), \(mode.rawValue), high score \(scoreText(for: mode))"
         )
         .accessibilityHint("Double tap to play")
     }
@@ -607,6 +651,37 @@ struct HomeTab: View {
     private func scoreText(for mode: GameMode) -> String {
         let score = highScore(for: mode)
         return score > 0 ? "\(score)" : "—"
+    }
+
+    /// Every card's top-left meta chip: the featured game gets its dynamic
+    /// "MOST PLAYED" / "FEATURED GAME" flag, the other two surface how many
+    /// times that mode has actually been played — so all three cards carry
+    /// real information instead of one having a label and the rest sitting
+    /// empty.
+    private func cardBadge(for mode: GameMode) -> (text: String, icon: String) {
+        if mode == featuredMode {
+            return (featuredLabel, statsVM.topMode == nil ? "sparkles" : "flame.fill")
+        }
+        let plays = statsVM.sessions.filter { $0.mode == mode }.count
+        if plays == 0 {
+            return ("NOT PLAYED YET", "sparkle")
+        }
+        return ("\(plays) \(plays == 1 ? "SESSION" : "SESSIONS")", "clock.arrow.circlepath")
+    }
+
+    /// Highest high score among all three modes — used to size each card's
+    /// relative-score bar so the cards rank themselves against each other
+    /// at a glance, not just display a number in isolation.
+    private var maxHighScoreAcrossModes: Int {
+        max(GameMode.allCases.map { highScore(for: $0) }.max() ?? 0, 1)
+    }
+
+    private func scoreFraction(for mode: GameMode) -> CGFloat {
+        let score = highScore(for: mode)
+        guard score > 0 else { return 0 }
+        // Floors at a small visible nub so a mode with a real (if modest)
+        // score never reads as flat-zero next to the leader.
+        return max(0.05, CGFloat(score) / CGFloat(maxHighScoreAcrossModes))
     }
 
     private func destination(for mode: GameMode) -> AnyView {
