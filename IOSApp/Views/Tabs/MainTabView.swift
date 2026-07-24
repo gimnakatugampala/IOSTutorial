@@ -18,27 +18,29 @@ struct MainTabView: View {
                 HomeTab()
             }
             .tag(AppTab.home)
+            .toolbar(.hidden, for: .tabBar)
 
             NavigationStack {
                 StatsTab()
             }
             .tag(AppTab.stats)
+            .toolbar(.hidden, for: .tabBar)
 
             NavigationStack {
                 MapTab()
             }
             .tag(AppTab.map)
+            .toolbar(.hidden, for: .tabBar)
 
             NavigationStack {
                 SettingsTab()
             }
             .tag(AppTab.settings)
+            .toolbar(.hidden, for: .tabBar)
         }
-        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             customTabBar
         }
-   
     }
 
     // MARK: - Custom tab bar
