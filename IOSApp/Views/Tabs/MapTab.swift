@@ -266,7 +266,7 @@ struct MapTab: View {
                 // saved while offline) just skip straight to the mode label.
                 if let name = session.playerName {
                     HStack(spacing: 5) {
-                        playerAvatar(for: session, size: 16)
+                        playerAvatar(for: session, size: 40)
                         Text(name)
                             .font(.system(size: 9, weight: .bold))
                             .lineLimit(1)
