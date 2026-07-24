@@ -77,6 +77,7 @@ Settings' "Clear All Game Data" removes session history and map pins only; "Rese
 
 ## Known Limitations
 
+- Speech recognition must be tested on a physical iPhone. It may fail to initialize or stop immediately in the iOS Simulator because the necessary speech services or language assets are unavailable.
 - All data is local to the device — nothing syncs between devices or machines.
 - The "player" name/photo attached to each session is just a randomly generated placeholder from a public API, not a real identity or multiplayer feature.
 - Map pins are jittered slightly from the recorded coordinate so multiple sessions played in the same spot don't render exactly on top of one another.
