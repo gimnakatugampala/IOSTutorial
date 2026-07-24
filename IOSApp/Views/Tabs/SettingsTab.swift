@@ -4,6 +4,12 @@
 //
 //  Created by Gimna Katugampala on 2026-07-08.
 //
+///
+//  SettingsTab.swift
+//  IOSApp
+//
+//  Created by Gimna Katugampala on 2026-07-08.
+//
 //  Rebuilt off the stock Form (which was rendering in the system's default
 //  light/dark chrome, disconnected from the rest of the app) into the same
 //  card-based dark language as Home/Stats/Map, with a working notification
@@ -27,11 +33,16 @@ struct SettingsTab: View {
     // Light It Up round length — read directly by LightItUpView/LightItUpVM
     @AppStorage("lightItUpRoundLength") private var roundLength = 60
 
-    // Quiz Rush accessibility preference — read directly by QuizRushView.
-    // Off by default since most players don't want questions read aloud;
-    // this is the single switch that turns the whole feature (auto-read +
-    // the in-game speaker button) on for players who do.
+    // Quiz Rush accessibility preferences — read directly by QuizRushView
+    // and HomeTab.
+    // - quizVoiceEnabled: auto-reads each question/answer aloud + shows the
+    //   in-game speaker button.
+    // - quizVoiceControlEnabled: lets the player also ANSWER by speaking,
+    //   and adds a "Start Quiz Rush by Voice" launcher on Home. Requires
+    //   quizVoiceEnabled (you need to hear the question to answer it), and
+    //   requires microphone + speech recognition permission.
     @AppStorage("quizRushVoiceEnabled") private var quizVoiceEnabled = false
+    @AppStorage("quizRushVoiceControlEnabled") private var voiceControlEnabled = false
 
     // Confirmation + feedback state for destructive data actions
     @State private var showClearConfirm = false
@@ -41,6 +52,9 @@ struct SettingsTab: View {
     // Notification-permission edge case: user denied (or previously revoked)
     // system permission, so flipping the toggle can't silently succeed.
     @State private var showPermissionDeniedAlert = false
+
+    // Same edge case for Voice Control's microphone/speech permissions.
+    @State private var showVoiceControlPermissionAlert = false
 
     @State private var appeared = false
 
@@ -86,7 +100,7 @@ struct SettingsTab: View {
                         title: "Accessibility",
                         icon: "accessibility",
                         tint: AppTheme.quizRush,
-                        footer: "When on, Quiz Rush automatically reads each question and its answer choices aloud, and announces whether you got it right — built for blind and low-vision players. A speaker button also appears in Quiz Rush so anyone can replay a question on demand."
+                        footer: "Read Aloud narrates each Quiz Rush question and its choices, and announces right/wrong. Voice Control goes further: it lets you launch Quiz Rush and answer every question by speaking, hands-free, and needs microphone + speech recognition access."
                     ) {
                         Toggle(isOn: $quizVoiceEnabled.animation(.spring(response: 0.3))) {
                             Text("Read Quiz Questions Aloud")
@@ -94,6 +108,36 @@ struct SettingsTab: View {
                                 .foregroundColor(AppTheme.textPrimary)
                         }
                         .tint(AppTheme.quizRush)
+                        .onChange(of: quizVoiceEnabled) { newValue in
+                            // Voice Control depends on narration being on —
+                            // you can't answer by voice a question you never
+                            // heard read aloud.
+                            if !newValue { voiceControlEnabled = false }
+                        }
+
+                        Divider().overlay(AppTheme.cardBorder)
+
+                        Toggle(isOn: $voiceControlEnabled.animation(.spring(response: 0.3))) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Voice Control (Answer by Speaking)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(quizVoiceEnabled ? AppTheme.textPrimary : AppTheme.textMuted)
+                                Text("Adds a “Start Quiz Rush by Voice” button on Home")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(AppTheme.textMuted)
+                            }
+                        }
+                        .tint(AppTheme.quizRush)
+                        .disabled(!quizVoiceEnabled)
+                        .onChange(of: voiceControlEnabled) { newValue in
+                            guard newValue else { return }
+                            VoiceCommandService.requestPermissions { granted in
+                                if !granted {
+                                    voiceControlEnabled = false
+                                    showVoiceControlPermissionAlert = true
+                                }
+                            }
+                        }
                     }
 
                     settingsCard(
@@ -221,14 +265,17 @@ struct SettingsTab: View {
         .navigationTitle("Settings")
         .onAppear {
             appeared = true
-            // If the toggle is on but the user revoked permission from iOS
-            // Settings since last launch, reflect that instead of lying to them.
+            // If a toggle is on but the user revoked the underlying system
+            // permission since last launch, reflect that instead of lying.
             if notificationsEnabled {
                 NotificationService.checkAuthorizationStatus { authorized in
                     if !authorized {
                         notificationsEnabled = false
                     }
                 }
+            }
+            if voiceControlEnabled && !VoiceCommandService.hasPermission() {
+                voiceControlEnabled = false
             }
         }
         .confirmationDialog(
@@ -270,6 +317,16 @@ struct SettingsTab: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Enable notifications for this app in iOS Settings to get your daily challenge reminder.")
+        }
+        .alert("Microphone & Speech Access Needed", isPresented: $showVoiceControlPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Voice Control needs microphone and speech recognition access to hear your answers. Enable both for this app in iOS Settings.")
         }
     }
 
@@ -345,9 +402,6 @@ struct SettingsTab: View {
     }
 
     // MARK: - Accent Color Picker
-    // Curated swatches (not a full color wheel) so every option stays
-    // readable against the app's dark background and doesn't collide with
-    // the fixed semantic colors (success/danger/warning).
 
     var accentColorPicker: some View {
         HStack(spacing: 14) {

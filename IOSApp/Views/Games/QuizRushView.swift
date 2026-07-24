@@ -1,23 +1,31 @@
 import SwiftUI
 
 struct QuizRushView: View {
+    /// When true (only ever set by HomeTab's Voice Control launcher), skips
+    /// genre selection and jumps straight into an "Any Genre" round — voice
+    /// control is meant to be a zero-touch flow from the moment the player
+    /// says "Quiz Rush," so making them then tap a genre grid would defeat it.
+    var autoStart: Bool = false
+
     @StateObject private var viewModel = QuizRushViewModel()
     @StateObject private var voice = QuizVoiceService()
+    @StateObject private var voiceCommand = VoiceCommandService()
     @Environment(\.dismiss) private var dismiss
     
-    // 1. Global Services for Map & Stats
     @EnvironmentObject var statsVM: StatsVM
     @EnvironmentObject var locationService: LocationService
     
     @AppStorage("quizRushHighScore") private var highScore = 0
 
-    // Global accessibility preference set in Settings — Quiz Rush only reads
-    // questions/answers aloud automatically when this is on, and the manual
-    // speaker button in the header is likewise only shown when it's on, so
-    // sighted players who don't want narration never even see the control.
     @AppStorage("quizRushVoiceEnabled") private var voiceEnabled = false
+    @AppStorage("quizRushVoiceControlEnabled") private var voiceControlEnabled = false
 
-    /// Message handed to the system share sheet from the game-over screen.
+    /// Counts consecutive failed voice-answer attempts on the current
+    /// question, so a noisy room can't leave the player stuck in an
+    /// infinite "didn't catch that" loop — after a couple of misses we back
+    /// off and let them answer by tapping instead.
+    @State private var answerListenAttempts = 0
+
     private var shareText: String {
         "I scored \(viewModel.score) points in Quiz Rush (\(viewModel.selectedCategory.displayName)) — \(viewModel.correctCount) correct! 🧠 Can you beat that?"
     }
@@ -36,6 +44,7 @@ struct QuizRushView: View {
                 HStack {
                     Button {
                         voice.stop()
+                        voiceCommand.stopListening()
                         dismiss()
                     } label: {
                         Image(systemName: "chevron.left.circle.fill").font(.title).foregroundColor(AppTheme.textPrimary.opacity(0.8))
@@ -46,9 +55,6 @@ struct QuizRushView: View {
                     Text("QUIZ RUSH").font(.headline).bold().foregroundColor(AppTheme.quizRush)
                     Spacer()
 
-                    // Manual "read it again" control — lets a VoiceOver/low-vision
-                    // player re-hear the current question and answers on demand,
-                    // separate from the automatic read-aloud on question change.
                     if viewModel.state == .loaded && !viewModel.isGameOver && voiceEnabled {
                         Button {
                             let question = viewModel.questions[viewModel.currentIndex]
@@ -96,33 +102,39 @@ struct QuizRushView: View {
             .animation(.easeInOut(duration: 0.25), value: viewModel.state)
         }
         .navigationBarBackButtonHidden(true)
+        .onAppear {
+            if autoStart, viewModel.state == .selectingCategory {
+                viewModel.selectCategory(.any)
+            }
+        }
         .task {
-            // 🚨 2. Fetch GPS in the background while the player picks a genre
             locationService.fetchLocation()
         }
-        // Auto-read the first question of a round the moment it finishes loading.
-        // All three handlers below are no-ops unless the player turned the
-        // "Read Quiz Questions Aloud" toggle on in Settings.
         .onChange(of: viewModel.state) { newState in
             guard voiceEnabled, newState == .loaded, !viewModel.isGameOver, !viewModel.questions.isEmpty else { return }
+            answerListenAttempts = 0
             let question = viewModel.questions[viewModel.currentIndex]
-            voice.speakQuestion(question.text, answers: question.answers)
+            voice.speakQuestion(question.text, answers: question.answers) {
+                listenForAnswer()
+            }
         }
-        // Auto-read every subsequent question as the player advances.
         .onChange(of: viewModel.currentIndex) { _ in
             guard voiceEnabled, viewModel.state == .loaded, !viewModel.isGameOver, !viewModel.questions.isEmpty else { return }
+            answerListenAttempts = 0
             let question = viewModel.questions[viewModel.currentIndex]
-            voice.speakQuestion(question.text, answers: question.answers)
+            voice.speakQuestion(question.text, answers: question.answers) {
+                listenForAnswer()
+            }
         }
-        // Announce whether the just-picked answer was right, and what the
-        // correct one was if not — fires once per answer, not on the reset to nil.
         .onChange(of: viewModel.answerFeedback) { feedback in
             guard voiceEnabled, let feedback else { return }
+            voiceCommand.stopListening()
             let correctAnswer = viewModel.questions[viewModel.currentIndex].correctAnswer
             voice.speakResult(isCorrect: feedback, correctAnswer: correctAnswer)
         }
         .onDisappear {
             voice.stop()
+            voiceCommand.stopListening()
         }
     }
     
@@ -210,6 +222,17 @@ struct QuizRushView: View {
             }
             .padding(.vertical, 8).padding(.horizontal, 16)
             .background(.ultraThinMaterial).cornerRadius(AppTheme.radiusPill)
+
+            if voiceControlEnabled && voiceCommand.isListening {
+                Label("Listening for your answer…", systemImage: "waveform")
+                    .font(.caption).bold()
+                    .foregroundColor(AppTheme.quizRush)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(AppTheme.quizRush.opacity(0.15))
+                    .clipShape(Capsule())
+                    .accessibilityLabel("Listening for your answer")
+                    .transition(.opacity)
+            }
             
             Spacer()
             
@@ -226,7 +249,10 @@ struct QuizRushView: View {
             
             VStack(spacing: 15) {
                 ForEach(Array(viewModel.questions[viewModel.currentIndex].answers.enumerated()), id: \.offset) { index, answer in
-                    Button { viewModel.checkAnswer(answer) } label: {
+                    Button {
+                        voiceCommand.stopListening()
+                        viewModel.checkAnswer(answer)
+                    } label: {
                         Text(answer).font(.headline).frame(maxWidth: .infinity).padding()
                             .background(buttonColor(for: answer)).foregroundColor(.white).cornerRadius(AppTheme.radiusButton - 1)
                     }
@@ -260,6 +286,7 @@ struct QuizRushView: View {
             
             VStack(spacing: 12) {
                 Button {
+                    voiceCommand.stopListening()
                     Task {
                         locationService.fetchLocation()
                         await viewModel.loadQuestions()
@@ -274,6 +301,7 @@ struct QuizRushView: View {
                 ShareScoreButton(shareText: shareText, tint: AppTheme.quizRush)
                 
                 Button {
+                    voiceCommand.stopListening()
                     viewModel.backToCategorySelection()
                 } label: {
                     Text("Choose a Different Genre").font(.subheadline).bold().frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -288,7 +316,14 @@ struct QuizRushView: View {
             if viewModel.score > highScore { highScore = viewModel.score }
 
             if voiceEnabled {
-                voice.announce("Quiz complete! Final score: \(viewModel.score) points. \(viewModel.correctCount) correct, \(viewModel.incorrectCount) incorrect.")
+                let summary = "Quiz complete! Final score: \(viewModel.score) points. \(viewModel.correctCount) correct, \(viewModel.incorrectCount) incorrect."
+                if voiceControlEnabled {
+                    voice.announce(summary) {
+                        listenForPostGameCommand()
+                    }
+                } else {
+                    voice.announce(summary)
+                }
             }
 
             locationService.awaitLocation { lat, lon in
@@ -312,5 +347,86 @@ struct QuizRushView: View {
         let isCorrectAnswer = answer == viewModel.questions[viewModel.currentIndex].correctAnswer
         if isCorrectAnswer { return AppTheme.success } else if !feedback { return AppTheme.danger.opacity(0.6) }
         return AppTheme.card
+    }
+
+    // MARK: - Voice Control
+
+    /// Starts listening right after a question finishes being read, matches
+    /// what's heard to one of the four on-screen options, and submits it —
+    /// the same code path a manual tap goes through.
+    private func listenForAnswer() {
+        guard voiceControlEnabled, viewModel.state == .loaded, !viewModel.isGameOver,
+              viewModel.currentIndex < viewModel.questions.count else { return }
+        let options = viewModel.questions[viewModel.currentIndex].answers
+
+        voiceCommand.listenOnce { heard in
+            guard let heard, let matched = matchSpokenAnswer(heard, options: options) else {
+                retryListeningForAnswer(options: options)
+                return
+            }
+            answerListenAttempts = 0
+            viewModel.checkAnswer(matched)
+        }
+    }
+
+    private func retryListeningForAnswer(options: [String]) {
+        answerListenAttempts += 1
+        guard answerListenAttempts <= 2 else {
+            answerListenAttempts = 0
+            voice.announce("You can also tap an answer on screen.")
+            return
+        }
+        voice.announce("Sorry, I didn't catch that. Please say the option number.") {
+            listenForAnswer()
+        }
+    }
+
+    /// Once the round is over, offers a hands-free way to keep going — "play
+    /// again" restarts the same genre, "menu" goes back to genre selection.
+    private func listenForPostGameCommand() {
+        voice.announce("Say play again, or say menu to choose a different genre.") {
+            voiceCommand.listenOnce { heard in
+                guard let heard else { return }
+                if heard.contains("again") || heard.contains("replay") {
+                    Task {
+                        locationService.fetchLocation()
+                        await viewModel.loadQuestions()
+                    }
+                } else if heard.contains("menu") || heard.contains("genre") {
+                    viewModel.backToCategorySelection()
+                }
+            }
+        }
+    }
+
+    /// Turns a messy spoken transcript into one of the four answer strings.
+    /// Tries, in order: "option 2" / "number two" / a bare digit or number
+    /// word (treated as a 1-based index), then falls back to fuzzy text
+    /// matching against the actual answer content so saying the answer
+    /// itself ("paris") works just as well as saying its option number.
+    private func matchSpokenAnswer(_ transcript: String, options: [String]) -> String? {
+        let cleaned = transcript.lowercased()
+
+        let numberWords: [String: Int] = [
+            "one": 1, "two": 2, "three": 3, "four": 4, "to": 2, "for": 4
+        ]
+        for (word, number) in numberWords where cleaned.contains(word) {
+            if number - 1 < options.count { return options[number - 1] }
+        }
+        // A short transcript that's basically just a digit — avoids
+        // mis-firing on a spoken answer that happens to contain a number,
+        // e.g. "nineteen sixty nine."
+        if cleaned.count <= 12, let digit = cleaned.compactMap({ $0.wholeNumberValue }).first,
+           digit >= 1, digit - 1 < options.count {
+            return options[digit - 1]
+        }
+
+        for option in options {
+            let optionLower = option.lowercased()
+            if cleaned == optionLower || cleaned.contains(optionLower) || optionLower.contains(cleaned) {
+                return option
+            }
+        }
+        return nil
     }
 }
