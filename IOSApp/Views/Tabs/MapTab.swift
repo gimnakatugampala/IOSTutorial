@@ -46,70 +46,85 @@ struct MapTab: View {
     
 
     var body: some View {
-        ZStack {
-            // Base fill shows for a beat before map tiles load, so there's
-            // never a flash of white behind the UI chrome.
-            AppTheme.background.ignoresSafeArea()
+        // GeometryReader + an explicit bottom ignoresSafeArea lets us read
+        // the *real* bottom safe-area inset (which includes the height of
+        // the app's custom bottom control deck, since MainTabView adds it
+        // via `.safeAreaInset`). Relying on automatic safe-area avoidance
+        // here left the legend card and recenter/zoom controls tucked
+        // underneath that deck; padding by the actual measured inset
+        // guarantees they always clear it, on any device.
+        GeometryReader { geo in
+            ZStack {
+                // Base fill shows for a beat before map tiles load, so there's
+                // never a flash of white behind the UI chrome.
+                AppTheme.background.ignoresSafeArea()
 
-            Map(position: $position) {
-                ForEach(filteredSessions) { session in
-                    Annotation(session.mode.rawValue, coordinate: getJitteredCoordinate(for: session)) {
-                        pinView(for: session)
-                            .onTapGesture {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                selectedSession = session
-                            }
+                Map(position: $position) {
+                    ForEach(filteredSessions) { session in
+                        Annotation(session.mode.rawValue, coordinate: getJitteredCoordinate(for: session)) {
+                            pinView(for: session)
+                                .onTapGesture {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    selectedSession = session
+                                }
+                        }
                     }
                 }
-            }
-            // 🌘 Forces Apple's dark map tiles regardless of system appearance,
-            // strips POI/transit clutter, and flattens elevation — reads like a
-            // clean game-world map instead of a real-world nav app.
-            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
-            .environment(\.colorScheme, .dark)
-            .onMapCameraChange(frequency: .continuous) { context in
-                liveRegion = context.region
-            }
-            .ignoresSafeArea()            // Subtle brand-colored wash over the tiles so the map's blues/greens
-            // pick up the same tint as the rest of the app rather than looking
-            // like a foreign surface dropped into the UI.
-            .overlay(
-                LinearGradient(
-                    colors: [AppTheme.background.opacity(0.35), .clear, AppTheme.brand.opacity(0.12)],
-                    startPoint: .top,
-                    endPoint: .bottom
+                // 🌘 Forces Apple's dark map tiles regardless of system appearance,
+                // strips POI/transit clutter, and flattens elevation — reads like a
+                // clean game-world map instead of a real-world nav app.
+                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
+                .environment(\.colorScheme, .dark)
+                .onMapCameraChange(frequency: .continuous) { context in
+                    liveRegion = context.region
+                }
+                .ignoresSafeArea()            // Subtle brand-colored wash over the tiles so the map's blues/greens
+                // pick up the same tint as the rest of the app rather than looking
+                // like a foreign surface dropped into the UI.
+                .overlay(
+                    LinearGradient(
+                        colors: [AppTheme.background.opacity(0.35), .clear, AppTheme.brand.opacity(0.12)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .blendMode(.multiply)
+                    .allowsHitTesting(false)
                 )
-                .blendMode(.multiply)
-                .allowsHitTesting(false)
-            )
 
-            VStack(spacing: 8) {
-                filterBar
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : -12)
+                VStack(spacing: 8) {
+                    filterBar
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : -12)
 
-                if filteredSessions.isEmpty {
-                    emptyState
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                }
-                Spacer()
-            }
-            .animation(.easeOut(duration: 0.4), value: appeared)
-            .animation(.easeInOut(duration: 0.25), value: filteredSessions.isEmpty)
-
-            VStack {
-                Spacer()
-                HStack(alignment: .bottom) {
-                    legendCard
+                    if filteredSessions.isEmpty {
+                        emptyState
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    }
                     Spacer()
-                    controlsStack
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 12)
-                .animation(.easeOut(duration: 0.4).delay(0.1), value: appeared)
+                .animation(.easeOut(duration: 0.4), value: appeared)
+                .animation(.easeInOut(duration: 0.25), value: filteredSessions.isEmpty)
+
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom) {
+                        legendCard
+                        Spacer()
+                        controlsStack
+                    }
+                    .padding(.horizontal)
+                    // Was a fixed 16 — now clears the custom bottom control
+                    // deck by however tall it actually renders on this device.
+                    .padding(.bottom, 160)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 12)
+                    .animation(.easeOut(duration: 0.4).delay(0.1), value: appeared)
+                }
             }
+            // Only the bottom edge is ignored (so the map/background can
+            // extend under the control deck) — the top stays untouched,
+            // leaving the filter bar exactly where it was.
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { appeared = true }
@@ -266,7 +281,7 @@ struct MapTab: View {
                 // saved while offline) just skip straight to the mode label.
                 if let name = session.playerName {
                     HStack(spacing: 5) {
-                        playerAvatar(for: session, size: 40)
+                        playerAvatar(for: session, size: 22)
                         Text(name)
                             .font(.system(size: 9, weight: .bold))
                             .lineLimit(1)
