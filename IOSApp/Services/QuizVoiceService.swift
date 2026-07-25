@@ -4,9 +4,6 @@
 //
 //  Created by Gimna Katugampala on 2026-07-18.
 ////
-//  QuizVoiceService.swift
-//  IOSApp
-//
 //  Lightweight wrapper around AVSpeechSynthesizer so Quiz Rush can read each
 //  question and its answer choices aloud — primarily for blind/low-vision
 //  players using VoiceOver, but works for anyone with the speaker button.
