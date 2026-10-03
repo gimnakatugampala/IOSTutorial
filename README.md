@@ -82,6 +82,15 @@ Settings' "Clear All Game Data" removes session history and map pins only; "Rese
 - The "player" name/photo attached to each session is just a randomly generated placeholder from a public API, not a real identity or multiplayer feature.
 - Map pins are jittered slightly from the recorded coordinate so multiple sessions played in the same spot don't render exactly on top of one another.
 
+## Reflection 
+
+-   Before developing this app I had little to no experience in developing apps for IOS. At the beginning it hard to even control the iMac in the Lab since I had only little experince operating a MacOS. But with consistant  visits to the macLab putting long hours to first get familiar with the MacOS Environment. Then learning SwiftUI was not hard since it is like any other programming language, therefore it was not a huge issue. Also, since our Lecturer Mr.Fuzil, broke this Course work down and gave us the work in stages it was very easy to grasp the module and the concepts of IOS. building those 3 games gave an insight on how to handle the apple SDKs and utilize the hardware for our development. Other than the SDKs I learnt to integrate external APIs and store them in our local storage. Before our IOS module i didn't really think about accecability features, but our lecturer encorage and dicussed the importance of adding those features to our apps. I was an enlighting experience beacuse there are so many different people who has diabilities and limitations and would lile or benefit from the apps we develop. Accecability features gives them a message that they are really heard and not merginalized. Therefore, in my app, I implemented voice control, and text-to-speech functionality to my app. This project also exposed me to different swift packages such as Swift Chart, Map Kit, Core Location and etc. Another challenge was managing data across different parts of the application. I used UserDefaults to persist game sessions, high scores and user preferences. This app also improved my understanding of reusable SwiftUI components. As the application became larger, separating common interface elements and game logic made the code easier to understand. 
+
+-   Finally, developing this app gave me an experience beyond just creating some UI screens, I learnt how to integrate device capabilities, external data, persistent state and multiple application features while keeping the code organised. I can confidently say that this app really had me shapern my skills in my programming and artitecture.
+
+    
+
+
 ## Credits
 
 Built by Gimna Katugampala. Trivia content courtesy of [Open Trivia DB](https://opentdb.com); placeholder player data courtesy of [randomuser.me](https://randomuser.me).
